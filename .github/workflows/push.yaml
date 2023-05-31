@@ -29,6 +29,6 @@ jobs:
       - run: |
           earthly \
             --push \
-            +build \
+            +image \
               --image=ghcr.io/djeebus/ftpsync:${{ env.RELEASE_VERSION }} \
               --GOLANG_VERSION=${{ env.GOLANG_TOOL_VERSION }}
