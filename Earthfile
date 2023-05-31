@@ -10,7 +10,7 @@ build:
     COPY . /src
 
     RUN go build -o ftpsync ./cmd/ftpsync
-    SAVE ARTIFACT ./ftpsync AS LOCAL ./dist/ftpsync
+    SAVE ARTIFACT --push ./ftpsync AS LOCAL ./dist/ftpsync
 
 image:
     ARG ALPINE_VERSION="3.17"
@@ -21,4 +21,4 @@ image:
     COPY +build/ftpsync /bin
     ENTRYPOINT /bin/ftpsync
 
-    SAVE IMAGE ${image}
+    SAVE IMAGE --push ${image}
