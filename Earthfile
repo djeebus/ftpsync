@@ -9,6 +9,9 @@ build:
     WORKDIR /src
     COPY . /src
 
+    RUN apk add --no-cache gcc musl-dev
+
+    ENV CGO_ENABLED=1
     RUN go build -o ftpsync ./cmd/ftpsync
     SAVE ARTIFACT ./ftpsync AS LOCAL ./dist/ftpsync
 
