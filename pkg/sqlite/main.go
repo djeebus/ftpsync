@@ -8,8 +8,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-const fileLocation = "ftpsync.db"
-
 const createFilesTable = `
 CREATE TABLE IF NOT EXISTS files (
     path 	STRING 		NOT NULL 	PRIMARY KEY,
@@ -18,10 +16,10 @@ CREATE TABLE IF NOT EXISTS files (
 )
 `
 
-func BuildDatabase() (pkg.Database, error) {
-	db, err := sql.Open("sqlite3", fileLocation)
+func BuildDatabase(dbPath string) (pkg.Database, error) {
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to open %s", fileLocation)
+		return nil, errors.Wrapf(err, "failed to open %s", dbPath)
 	}
 
 	if _, err = db.Exec(createFilesTable); err != nil {

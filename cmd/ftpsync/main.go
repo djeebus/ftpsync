@@ -13,7 +13,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var rootDir string
+var (
+	rootDir    string
+	dbLocation string
+)
 
 var rootCmd = cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -48,7 +51,7 @@ var rootCmd = cobra.Command{
 			}
 		}
 
-		if database, err = sqlite.BuildDatabase(); err != nil {
+		if database, err = sqlite.BuildDatabase(dbLocation); err != nil {
 			return errors.Wrap(err, "failed to build database")
 		}
 		if destination, err = localfs.BuildDestination(dst); err != nil {
@@ -62,6 +65,7 @@ var rootCmd = cobra.Command{
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&rootDir, "root", "/", "remote path to sync")
+	rootCmd.PersistentFlags().StringVar(&dbLocation, "database", "ftpsync.db", "path to database")
 }
 
 func main() {
