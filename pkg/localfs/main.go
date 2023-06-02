@@ -26,6 +26,28 @@ type LocalDestination struct {
 	root     string
 }
 
+func (l *LocalDestination) GetAllFiles(rootPath string) (*pkg.Set, error) {
+	files := pkg.NewSet()
+	fsys := os.DirFS(l.root)
+	rootPath = strings.TrimLeft(rootPath, "/")
+	if err := fs.WalkDir(fsys, rootPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return errors.Wrap(err, "error while walking")
+		}
+
+		if d.IsDir() {
+			return nil
+		}
+
+		files.Set("/" + path)
+		return nil
+	}); err != nil {
+		return nil, errors.Wrap(err, "failed to walk file system")
+	}
+
+	return files, nil
+}
+
 func (l *LocalDestination) toLocalPath(path string) string {
 	path = strings.TrimLeft(path, "/")
 	path = filepath.Join(l.root, path)
@@ -42,6 +64,15 @@ func (l *LocalDestination) Exists(path string) (bool, error) {
 	} else {
 		return true, nil
 	}
+}
+
+func (l *LocalDestination) Delete(path string) error {
+	path = l.toLocalPath(path)
+	if err := os.Remove(path); err != nil {
+		return errors.Wrap(err, "failed to delete file")
+	}
+
+	return nil
 }
 
 func (l *LocalDestination) Write(path string, fp io.ReadCloser) (int64, error) {

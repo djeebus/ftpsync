@@ -88,7 +88,7 @@ var rootCmd = cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().StringVar(&rootDir, "root", "/", "remote path to sync")
 	rootCmd.PersistentFlags().StringVar(&dbLocation, "database", "ftpsync.db", "path to database")
-	rootCmd.PersistentFlags().StringVar(&fileModeStr, "dir-mode", "0777", "mode for directories")
+	rootCmd.PersistentFlags().StringVar(&dirModeStr, "dir-mode", "0777", "mode for directories")
 	rootCmd.PersistentFlags().StringVar(&fileModeStr, "file-mode", "0666", "mode for files")
 }
 

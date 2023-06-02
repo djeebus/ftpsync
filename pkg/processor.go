@@ -19,8 +19,124 @@ type Processor struct {
 	dst Destination
 }
 
+type FileStatusKey struct {
+	HasFtp, HasDb, HasLocal bool
+}
+
+type TruthAction func(FileStatusKey, *Processor, string, string) error
+
+var fileStatusActions = map[FileStatusKey]TruthAction{
+	{true, false, false}:  downloadFile,
+	{true, true, false}:   skipFile,
+	{true, true, true}:    skipFile,
+	{false, true, false}:  deleteFile,
+	{false, true, true}:   deleteFile,
+	{false, false, true}:  deleteFile,
+	{false, false, false}: logFile,
+	{true, false, true}:   recordFile,
+}
+
 func (p *Processor) Process(rootPath string) error {
+	var (
+		err error
+
+		ftpFiles   *Set
+		dbFiles    *Set
+		localFiles *Set
+	)
+
 	jobID := uuid.NewString()
+
+	if ftpFiles, err = p.getFtpFiles(rootPath); err != nil {
+		return errors.Wrap(err, "failed to get ftp files")
+	}
+
+	if dbFiles, err = p.getDbFiles(); err != nil {
+		return errors.Wrap(err, "failed to get database files")
+	}
+
+	if localFiles, err = p.getLocalFiles(rootPath); err != nil {
+		return errors.Wrap(err, "failed to get local files")
+	}
+
+	allFiles := NewSet().Union(ftpFiles).Union(dbFiles).Union(localFiles)
+
+	for _, file := range allFiles.ToList() {
+		hasFtpFile := ftpFiles.Has(file)
+		hasDbFile := dbFiles.Has(file)
+		hasLocalFile := localFiles.Has(file)
+
+		key := FileStatusKey{
+			HasDb:    hasDbFile,
+			HasFtp:   hasFtpFile,
+			HasLocal: hasLocalFile,
+		}
+		action := fileStatusActions[key]
+		if err = action(key, p, file, jobID); err != nil {
+			return errors.Wrapf(err, "failed to perform action for %s", file)
+		}
+	}
+
+	return nil
+}
+
+func downloadFile(key FileStatusKey, p *Processor, path, jobID string) error {
+	fmt.Printf("+++ downloading %s ... ", path)
+	fp, err := p.src.Read(path)
+	if err != nil {
+		return errors.Wrapf(err, "failed to read %s", path)
+	}
+
+	start := time.Now()
+	bytes, err := p.dst.Write(path, fp)
+	if err != nil {
+		return errors.Wrapf(err, "failed to write %s", path)
+	}
+	done := time.Since(start)
+	fmt.Printf("%s in %d seconds, %s\n", fmtSize(bytes), int64(done.Seconds()), fmtSpeed(bytes, done))
+	if err = p.db.Record(path, jobID); err != nil {
+		return errors.Wrapf(err, "failed to record %s", path)
+	}
+
+	return nil
+}
+
+func recordFile(key FileStatusKey, p *Processor, path, jobID string) error {
+	if err := p.db.Record(path, jobID); err != nil {
+		return errors.Wrapf(err, "failed to record %s", path)
+	}
+
+	return nil
+}
+
+func skipFile(key FileStatusKey, p *Processor, path, jobID string) error {
+	return nil
+}
+
+func deleteFile(key FileStatusKey, p *Processor, path, jobID string) error {
+	if key.HasDb {
+		if err := p.db.Delete(path); err != nil {
+			return errors.Wrap(err, "error unrecording file")
+		}
+	}
+
+	if key.HasLocal {
+		if err := p.dst.Delete(path); err != nil {
+			return errors.Wrap(err, "error deleting file")
+		}
+	}
+
+	return nil
+}
+
+func logFile(key FileStatusKey, p *Processor, path, jobID string) error {
+	fmt.Printf("!!! file %s is in a weird state: [ftp: %t, db: %t, local: %t],  !!!\n", path, key.HasFtp, key.HasDb, key.HasLocal)
+	return nil
+}
+
+func (p *Processor) getFtpFiles(rootPath string) (*Set, error) {
+	ftpFiles := NewSet()
+
 	work := Queue[string]{MaxSize: 1000}
 	work.Enqueue(rootPath)
 
@@ -31,7 +147,7 @@ func (p *Processor) Process(rootPath string) error {
 
 		results, err := p.src.List(path)
 		if err != nil {
-			return errors.Wrap(err, "failed to read files")
+			return nil, errors.Wrap(err, "failed to read files")
 		}
 
 		for _, d := range results.Folders {
@@ -42,43 +158,29 @@ func (p *Processor) Process(rootPath string) error {
 		// ftp=yes
 		for _, f := range results.Files {
 			fullPath := filepath.Join(path, f)
-
-			if ok, err := p.db.Exists(fullPath); err != nil {
-				return errors.Wrapf(err, "failed to check db for path %s", fullPath)
-			} else if ok {
-				// ftp=yes,db=yes,local=no
-				// ftp=yes,db=yes,local=yes
-				continue
-			}
-
-			if ok, err := p.dst.Exists(fullPath); err != nil {
-				return errors.Wrapf(err, "failed to check local for path %s", fullPath)
-			} else if ok {
-				// ftp=yes,db=no,local=yes
-				continue
-			}
-
-			// ftp=yes,db=no,local=no
-			fmt.Printf("+++ downloading %s ... ", fullPath)
-			fp, err := p.src.Read(fullPath)
-			if err != nil {
-				return errors.Wrapf(err, "failed to read %s", fullPath)
-			}
-
-			start := time.Now()
-			bytes, err := p.dst.Write(fullPath, fp)
-			if err != nil {
-				return errors.Wrapf(err, "failed to write %s", fullPath)
-			}
-			done := time.Since(start)
-			fmt.Printf("%s in %d seconds, %s\n", fmtSize(bytes), int64(done.Seconds()), fmtSpeed(bytes, done))
-			if err = p.db.Record(fullPath, jobID); err != nil {
-				return errors.Wrapf(err, "failed to record %s", fullPath)
-			}
+			ftpFiles.Set(fullPath)
 		}
 	}
 
-	return nil
+	return ftpFiles, nil
+}
+
+func (p *Processor) getDbFiles() (*Set, error) {
+	files, err := p.db.GetAllFiles()
+	if err != nil {
+		return nil, errors.Wrap(err, "error getting database files")
+	}
+
+	return files, nil
+}
+
+func (p *Processor) getLocalFiles(rootPath string) (*Set, error) {
+	files, err := p.dst.GetAllFiles(rootPath)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get destination files")
+	}
+
+	return files, nil
 }
 
 var markers = []string{"B", "KB", "MB", "GB", "TB"}
@@ -104,17 +206,3 @@ func fmtSize(bytes int64) string {
 
 	return fmt.Sprintf("%.2f%s", b, markers[idx])
 }
-
-// truth matrix
-// ftp	db		local	action
-// yes	no		no		download
-
-// yes	yes		no		skip
-// yes	yes		yes		skip
-
-// no	yes		no		delete
-// no	yes		yes		delete
-
-// no	no		yes		log
-// no	no		no		log
-// yes	no		yes		log

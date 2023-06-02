@@ -33,6 +33,25 @@ type SqliteDb struct {
 	db *sql.DB
 }
 
+func (s *SqliteDb) GetAllFiles() (*pkg.Set, error) {
+	row, err := s.db.Query(`SELECT path FROM files`)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get all files")
+	}
+
+	var path string
+	files := pkg.NewSet()
+	for row.Next() {
+		if err = row.Scan(&path); err != nil {
+			return nil, errors.Wrap(err, "failed to scan")
+		}
+
+		files.Set(path)
+	}
+
+	return files, nil
+}
+
 func (s *SqliteDb) Exists(path string) (bool, error) {
 	var c int
 
@@ -54,6 +73,17 @@ func (s *SqliteDb) Record(path, jobID string) error {
 		"INSERT INTO files (path, jobID) VALUES (?, ?)",
 		path, jobID); err != nil {
 		return errors.Wrapf(err, "failed to record %s", path)
+	}
+
+	return nil
+}
+
+func (s *SqliteDb) Delete(path string) error {
+	if _, err := s.db.Exec(
+		`DELETE FROM files WHERE path = ?`,
+		path,
+	); err != nil {
+		return errors.Wrap(err, "failed to delete a file")
 	}
 
 	return nil
