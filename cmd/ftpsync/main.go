@@ -2,15 +2,9 @@ package main
 
 import (
 	"fmt"
-	"net/url"
 	"os"
 	"strconv"
 
-	"github.com/djeebus/ftpsync/pkg"
-	"github.com/djeebus/ftpsync/pkg/filebrowser"
-	"github.com/djeebus/ftpsync/pkg/ftp"
-	"github.com/djeebus/ftpsync/pkg/localfs"
-	"github.com/djeebus/ftpsync/pkg/sqlite"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
@@ -36,52 +30,11 @@ var rootCmd = cobra.Command{
 			return errors.New("usage: ftpsync SRC DST")
 		}
 
-		var (
-			src = args[0]
-			dst = args[1]
-
-			err         error
-			url         *url.URL
-			source      pkg.Source
-			database    pkg.Database
-			destination pkg.Destination
-
-			dirMode  os.FileMode
-			fileMode os.FileMode
-		)
-
-		url, err = url.Parse(src)
-		if err != nil {
-			return errors.Wrap(err, "fail to parse url")
+		if err := doSync(args[0], args[1]); err != nil {
+			fmt.Printf("sync failed: \n\n%v\n", err)
 		}
 
-		if fileMode, err = parseFsMode(fileModeStr); err != nil {
-			return errors.Wrap(err, "failed to parse file mode")
-		}
-		if dirMode, err = parseFsMode(dirModeStr); err != nil {
-			return errors.Wrap(err, "failed to parse dir mode")
-		}
-
-		switch url.Scheme {
-		case "ftp", "ftps", "sftp":
-			if source, err = ftp.BuildSource(url); err != nil {
-				return errors.Wrap(err, "failed to build ftp source")
-			}
-		case "filebrowser":
-			if source, err = filebrowser.BuildSource(url); err != nil {
-				return errors.Wrap(err, "failed to build filebrowser source")
-			}
-		}
-
-		if database, err = sqlite.BuildDatabase(dbLocation); err != nil {
-			return errors.Wrap(err, "failed to build database")
-		}
-		if destination, err = localfs.BuildDestination(dst, dirMode, fileMode); err != nil {
-			return errors.Wrap(err, "failed to build destination")
-		}
-
-		processor := pkg.BuildProcessor(source, database, destination)
-		return processor.Process(rootDir)
+		return nil
 	},
 }
 
@@ -95,5 +48,6 @@ func init() {
 func main() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println("error: ", err)
+		os.Exit(1)
 	}
 }
