@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"net/url"
+	"os"
+	"strconv"
 
 	"github.com/djeebus/ftpsync/pkg"
 	"github.com/djeebus/ftpsync/pkg/filebrowser"
@@ -14,9 +16,19 @@ import (
 )
 
 var (
-	rootDir    string
-	dbLocation string
+	rootDir     string
+	dbLocation  string
+	dirModeStr  string
+	fileModeStr string
 )
+
+func parseFsMode(mode string) (os.FileMode, error) {
+	mode64, err := strconv.ParseInt(mode, 8, 32)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to parse mode")
+	}
+	return os.FileMode(mode64), nil
+}
 
 var rootCmd = cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -33,11 +45,21 @@ var rootCmd = cobra.Command{
 			source      pkg.Source
 			database    pkg.Database
 			destination pkg.Destination
+
+			dirMode  os.FileMode
+			fileMode os.FileMode
 		)
 
 		url, err = url.Parse(src)
 		if err != nil {
 			return errors.Wrap(err, "fail to parse url")
+		}
+
+		if fileMode, err = parseFsMode(fileModeStr); err != nil {
+			return errors.Wrap(err, "failed to parse file mode")
+		}
+		if dirMode, err = parseFsMode(dirModeStr); err != nil {
+			return errors.Wrap(err, "failed to parse dir mode")
 		}
 
 		switch url.Scheme {
@@ -54,7 +76,7 @@ var rootCmd = cobra.Command{
 		if database, err = sqlite.BuildDatabase(dbLocation); err != nil {
 			return errors.Wrap(err, "failed to build database")
 		}
-		if destination, err = localfs.BuildDestination(dst); err != nil {
+		if destination, err = localfs.BuildDestination(dst, dirMode, fileMode); err != nil {
 			return errors.Wrap(err, "failed to build destination")
 		}
 
@@ -66,6 +88,8 @@ var rootCmd = cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().StringVar(&rootDir, "root", "/", "remote path to sync")
 	rootCmd.PersistentFlags().StringVar(&dbLocation, "database", "ftpsync.db", "path to database")
+	rootCmd.PersistentFlags().StringVar(&fileModeStr, "dir-mode", "0777", "mode for directories")
+	rootCmd.PersistentFlags().StringVar(&fileModeStr, "file-mode", "0666", "mode for files")
 }
 
 func main() {

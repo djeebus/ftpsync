@@ -3,6 +3,7 @@ package localfs
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,12 +12,18 @@ import (
 	"github.com/pkg/errors"
 )
 
-func BuildDestination(dst string) (pkg.Destination, error) {
-	return &LocalDestination{dst}, nil
+func BuildDestination(dst string, dirMode, fileMode fs.FileMode) (pkg.Destination, error) {
+	return &LocalDestination{
+		root:     dst,
+		dirMode:  dirMode,
+		fileMode: fileMode,
+	}, nil
 }
 
 type LocalDestination struct {
-	root string
+	dirMode  fs.FileMode
+	fileMode fs.FileMode
+	root     string
 }
 
 func (l *LocalDestination) toLocalPath(path string) string {
@@ -48,7 +55,7 @@ func (l *LocalDestination) Write(path string, fp io.ReadCloser) (int64, error) {
 	path = l.toLocalPath(path)
 	dirname := filepath.Dir(path)
 
-	if err = os.MkdirAll(dirname, 0777); err != nil {
+	if err = os.MkdirAll(dirname, l.dirMode); err != nil {
 		return 0, errors.Wrap(err, "failed to create directory")
 	}
 
@@ -65,8 +72,12 @@ func (l *LocalDestination) Write(path string, fp io.ReadCloser) (int64, error) {
 		return 0, errors.Wrap(err, "failed to close temp file")
 	}
 
-	if err := os.Rename(temppath.Name(), path); err != nil {
+	if err = os.Rename(temppath.Name(), path); err != nil {
 		return 0, errors.Wrap(err, "failed to rename temp file to final destination")
+	}
+
+	if err = os.Chmod(path, l.fileMode); err != nil {
+		return 0, errors.Wrap(err, "failed to set the mode")
 	}
 
 	return size, nil
