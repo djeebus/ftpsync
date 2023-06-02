@@ -8,12 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/djeebus/ftpsync/pkg"
 	"github.com/jlaffaye/ftp"
 	"github.com/pkg/errors"
+
+	"github.com/djeebus/ftpsync/lib"
 )
 
-func BuildSource(url *url.URL) (pkg.Source, error) {
+func New(url *url.URL) (lib.Source, error) {
 	var opts = ftp.DialOption{}
 	switch url.Scheme {
 	case "sftp":
@@ -37,22 +38,26 @@ func BuildSource(url *url.URL) (pkg.Source, error) {
 		return nil, errors.Wrap(err, "failed to login")
 	}
 
-	return &FtpSource{conn: conn, root: url.Path}, nil
+	return &source{conn: conn, root: url.Path}, nil
 }
 
-type FtpSource struct {
+type source struct {
 	root string
 	conn *ftp.ServerConn
 }
 
-func (f *FtpSource) toRemotePath(path string) string {
+func (f *source) GetAllFiles(path string) (*lib.Set, error) {
+	return lib.WalkLister(f, path)
+}
+
+func (f *source) toRemotePath(path string) string {
 	path = strings.TrimLeft(path, "/")
 	path = filepath.Join(f.root, path)
 	return path
 }
 
-func (f *FtpSource) List(path string) (pkg.ListResult, error) {
-	var result pkg.ListResult
+func (f *source) List(path string) (lib.ListResult, error) {
+	var result lib.ListResult
 
 	rootPath := f.toRemotePath(path)
 
@@ -80,7 +85,7 @@ func (f *FtpSource) List(path string) (pkg.ListResult, error) {
 	return result, nil
 }
 
-func (f *FtpSource) Read(path string) (io.ReadCloser, error) {
+func (f *source) Read(path string) (io.ReadCloser, error) {
 	path = f.toRemotePath(path)
 
 	e, err := f.conn.Retr(path)
@@ -91,4 +96,4 @@ func (f *FtpSource) Read(path string) (io.ReadCloser, error) {
 	return e, nil
 }
 
-var _ pkg.Source = new(FtpSource)
+var _ lib.Source = new(source)

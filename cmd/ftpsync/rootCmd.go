@@ -4,12 +4,13 @@ import (
 	"net/url"
 	"os"
 
-	"github.com/djeebus/ftpsync/pkg"
-	"github.com/djeebus/ftpsync/pkg/filebrowser"
-	"github.com/djeebus/ftpsync/pkg/ftp"
-	"github.com/djeebus/ftpsync/pkg/localfs"
-	"github.com/djeebus/ftpsync/pkg/sqlite"
 	"github.com/pkg/errors"
+
+	"github.com/djeebus/ftpsync/lib"
+	"github.com/djeebus/ftpsync/lib/filebrowser"
+	"github.com/djeebus/ftpsync/lib/ftp"
+	"github.com/djeebus/ftpsync/lib/localfs"
+	"github.com/djeebus/ftpsync/lib/sqlite"
 )
 
 func doSync(src, dst string) error {
@@ -17,9 +18,9 @@ func doSync(src, dst string) error {
 	var (
 		err         error
 		srcURL      *url.URL
-		source      pkg.Source
-		database    pkg.Database
-		destination pkg.Destination
+		source      lib.Source
+		database    lib.Database
+		destination lib.Destination
 
 		dirMode  os.FileMode
 		fileMode os.FileMode
@@ -39,22 +40,22 @@ func doSync(src, dst string) error {
 
 	switch srcURL.Scheme {
 	case "ftp", "ftps", "sftp":
-		if source, err = ftp.BuildSource(srcURL); err != nil {
+		if source, err = ftp.New(srcURL); err != nil {
 			return errors.Wrap(err, "failed to build ftp source")
 		}
 	case "filebrowser":
-		if source, err = filebrowser.BuildSource(srcURL); err != nil {
+		if source, err = filebrowser.New(srcURL); err != nil {
 			return errors.Wrap(err, "failed to build filebrowser source")
 		}
 	}
 
-	if database, err = sqlite.BuildDatabase(dbLocation); err != nil {
+	if database, err = sqlite.New(dbLocation); err != nil {
 		return errors.Wrap(err, "failed to build database")
 	}
-	if destination, err = localfs.BuildDestination(dst, dirMode, fileMode); err != nil {
+	if destination, err = localfs.New(dst, dirMode, fileMode); err != nil {
 		return errors.Wrap(err, "failed to build destination")
 	}
 
-	processor := pkg.BuildProcessor(source, database, destination)
+	processor := lib.BuildProcessor(source, database, destination)
 	return processor.Process(rootDir)
 }

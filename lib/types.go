@@ -1,15 +1,10 @@
-package pkg
+package lib
 
 import "io"
 
 type Source interface {
-	List(path string) (ListResult, error)
 	Read(path string) (io.ReadCloser, error)
-}
-
-type ListResult struct {
-	Files   []string
-	Folders []string
+	GetAllFiles(path string) (*Set, error)
 }
 
 type Destination interface {
@@ -20,8 +15,8 @@ type Destination interface {
 }
 
 type Database interface {
-	GetAllFiles() (*Set, error)
+	GetAllFiles(path string) (*Set, error)
 	Exists(path string) (bool, error)
-	Record(path, jobID string) error
+	Record(path string) error
 	Delete(path string) error
 }

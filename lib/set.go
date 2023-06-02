@@ -1,4 +1,4 @@
-package pkg
+package lib
 
 func NewSet() *Set {
 	var set Set

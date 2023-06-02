@@ -8,25 +8,26 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/djeebus/ftpsync/pkg"
 	"github.com/pkg/errors"
+
+	"github.com/djeebus/ftpsync/lib"
 )
 
-func BuildDestination(dst string, dirMode, fileMode fs.FileMode) (pkg.Destination, error) {
-	return &LocalDestination{
+func New(dst string, dirMode, fileMode fs.FileMode) (lib.Destination, error) {
+	return &destination{
 		root:     dst,
 		dirMode:  dirMode,
 		fileMode: fileMode,
 	}, nil
 }
 
-type LocalDestination struct {
+type destination struct {
 	dirMode  fs.FileMode
 	fileMode fs.FileMode
 	root     string
 }
 
-func (l *LocalDestination) GetAllFiles(rootPath string) (*pkg.Set, error) {
+func (l *destination) GetAllFiles(rootPath string) (*lib.Set, error) {
 	// so much trimming required to get FS to work
 	root := strings.TrimRight(l.root, "/")
 	rootPath = strings.TrimLeft(rootPath, "/")
@@ -34,7 +35,7 @@ func (l *LocalDestination) GetAllFiles(rootPath string) (*pkg.Set, error) {
 
 	fsys := os.DirFS(root)
 
-	files := pkg.NewSet()
+	files := lib.NewSet()
 	if err := fs.WalkDir(fsys, rootPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return errors.Wrapf(err, "error at %s", path)
@@ -53,13 +54,13 @@ func (l *LocalDestination) GetAllFiles(rootPath string) (*pkg.Set, error) {
 	return files, nil
 }
 
-func (l *LocalDestination) toLocalPath(path string) string {
+func (l *destination) toLocalPath(path string) string {
 	path = strings.TrimLeft(path, "/")
 	path = filepath.Join(l.root, path)
 	return path
 }
 
-func (l *LocalDestination) Exists(path string) (bool, error) {
+func (l *destination) Exists(path string) (bool, error) {
 	path = l.toLocalPath(path)
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -71,7 +72,7 @@ func (l *LocalDestination) Exists(path string) (bool, error) {
 	}
 }
 
-func (l *LocalDestination) Delete(path string) error {
+func (l *destination) Delete(path string) error {
 	path = l.toLocalPath(path)
 	if err := os.Remove(path); err != nil {
 		return errors.Wrap(err, "failed to delete file")
@@ -80,7 +81,7 @@ func (l *LocalDestination) Delete(path string) error {
 	return nil
 }
 
-func (l *LocalDestination) Write(path string, fp io.ReadCloser) (int64, error) {
+func (l *destination) Write(path string, fp io.ReadCloser) (int64, error) {
 	defer func() {
 		if err := fp.Close(); err != nil {
 			fmt.Printf("failed to close reader for %s: %v", path, err)
@@ -119,4 +120,4 @@ func (l *LocalDestination) Write(path string, fp io.ReadCloser) (int64, error) {
 	return size, nil
 }
 
-var _ pkg.Destination = new(LocalDestination)
+var _ lib.Destination = new(destination)

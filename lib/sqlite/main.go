@@ -3,9 +3,10 @@ package sqlite
 import (
 	"database/sql"
 
-	"github.com/djeebus/ftpsync/pkg"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
+
+	"github.com/djeebus/ftpsync/lib"
 )
 
 const createFilesTable = `
@@ -16,7 +17,7 @@ CREATE TABLE IF NOT EXISTS files (
 )
 `
 
-func BuildDatabase(dbPath string) (pkg.Database, error) {
+func New(dbPath string) (lib.Database, error) {
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to open %s", dbPath)
@@ -26,21 +27,22 @@ func BuildDatabase(dbPath string) (pkg.Database, error) {
 		return nil, errors.Wrap(err, "failed to create files table")
 	}
 
-	return &SqliteDb{db}, nil
+	return &database{db}, nil
 }
 
-type SqliteDb struct {
+type database struct {
 	db *sql.DB
 }
 
-func (s *SqliteDb) GetAllFiles() (*pkg.Set, error) {
-	row, err := s.db.Query(`SELECT path FROM files`)
+func (s *database) GetAllFiles(rootPath string) (*lib.Set, error) {
+	row, err := s.db.Query(`SELECT path FROM files WHERE path LIKE '?%'`, rootPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get all files")
 	}
 
 	var path string
-	files := pkg.NewSet()
+
+	files := lib.NewSet()
 	for row.Next() {
 		if err = row.Scan(&path); err != nil {
 			return nil, errors.Wrap(err, "failed to scan")
@@ -52,7 +54,7 @@ func (s *SqliteDb) GetAllFiles() (*pkg.Set, error) {
 	return files, nil
 }
 
-func (s *SqliteDb) Exists(path string) (bool, error) {
+func (s *database) Exists(path string) (bool, error) {
 	var c int
 
 	row := s.db.QueryRow(`SELECT 1 FROM files WHERE path = ?`, path)
@@ -68,17 +70,17 @@ func (s *SqliteDb) Exists(path string) (bool, error) {
 	}
 }
 
-func (s *SqliteDb) Record(path, jobID string) error {
+func (s *database) Record(path string) error {
 	if _, err := s.db.Exec(
 		"INSERT INTO files (path, jobID) VALUES (?, ?)",
-		path, jobID); err != nil {
+		path, ""); err != nil {
 		return errors.Wrapf(err, "failed to record %s", path)
 	}
 
 	return nil
 }
 
-func (s *SqliteDb) Delete(path string) error {
+func (s *database) Delete(path string) error {
 	if _, err := s.db.Exec(
 		`DELETE FROM files WHERE path = ?`,
 		path,
@@ -89,4 +91,4 @@ func (s *SqliteDb) Delete(path string) error {
 	return nil
 }
 
-var _ pkg.Database = new(SqliteDb)
+var _ lib.Database = new(database)
