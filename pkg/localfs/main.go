@@ -27,10 +27,14 @@ type LocalDestination struct {
 }
 
 func (l *LocalDestination) GetAllFiles(rootPath string) (*pkg.Set, error) {
-	files := pkg.NewSet()
-	fsys := os.DirFS(l.root)
+	// so much trimming required to get FS to work
+	root := strings.TrimRight(l.root, "/")
 	rootPath = strings.TrimLeft(rootPath, "/")
+	rootPath = strings.TrimRight(rootPath, "/")
 
+	fsys := os.DirFS(root)
+
+	files := pkg.NewSet()
 	if err := fs.WalkDir(fsys, rootPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return errors.Wrapf(err, "error at %s", path)
@@ -43,7 +47,7 @@ func (l *LocalDestination) GetAllFiles(rootPath string) (*pkg.Set, error) {
 		files.Set("/" + path)
 		return nil
 	}); err != nil {
-		return nil, errors.Wrapf(err, "failed to walk %s", rootPath)
+		return nil, errors.Wrapf(err, "failed to walk [%s, %s]", l.root, rootPath)
 	}
 
 	return files, nil
