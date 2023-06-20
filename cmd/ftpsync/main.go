@@ -32,6 +32,7 @@ var rootCmd = cobra.Command{
 
 		if err := doSync(args[0], args[1]); err != nil {
 			fmt.Printf("sync failed: \n\n%v\n", err)
+			os.Exit(1)
 		}
 
 		return nil
