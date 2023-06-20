@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"database/sql"
+	"fmt"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
@@ -12,8 +13,7 @@ import (
 const createFilesTable = `
 CREATE TABLE IF NOT EXISTS files (
     path 	STRING 		NOT NULL 	PRIMARY KEY,
-    time 	DATETIME 	NOT NULL	DEFAULT CURRENT_TIMESTAMP,
-    jobID 	STRING 		NOT NULL
+    time 	DATETIME 	NOT NULL	DEFAULT CURRENT_TIMESTAMP
 )
 `
 
@@ -35,7 +35,7 @@ type database struct {
 }
 
 func (s *database) GetAllFiles(rootPath string) (*lib.Set, error) {
-	row, err := s.db.Query(`SELECT path FROM files WHERE path LIKE '?%'`, rootPath)
+	row, err := s.db.Query(`SELECT path FROM files WHERE path LIKE ?`, fmt.Sprintf("%s%%", rootPath))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get all files")
 	}
@@ -71,9 +71,10 @@ func (s *database) Exists(path string) (bool, error) {
 }
 
 func (s *database) Record(path string) error {
-	if _, err := s.db.Exec(
-		"INSERT INTO files (path, jobID) VALUES (?, ?)",
-		path, ""); err != nil {
+	if _, err := s.db.Exec(`
+INSERT INTO files (path) VALUES (?)
+ON CONFLICT (path) DO UPDATE SET path = excluded.path
+`, path, ""); err != nil {
 		return errors.Wrapf(err, "failed to record %s", path)
 	}
 
