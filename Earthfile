@@ -12,7 +12,7 @@ build:
     RUN apk add --no-cache gcc musl-dev
 
     ENV CGO_ENABLED=1
-    RUN go build -o ftpsync ./cmd/ftpsync
+    RUN go build -o ftpsync ./main.go
     SAVE ARTIFACT ./ftpsync AS LOCAL ./dist/ftpsync
 
 image:
