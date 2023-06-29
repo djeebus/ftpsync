@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"fmt"
@@ -24,7 +24,7 @@ func parseFsMode(mode string) (os.FileMode, error) {
 	return os.FileMode(mode64), nil
 }
 
-var rootCmd = cobra.Command{
+var RootCmd = cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 2 {
 			return errors.New("usage: ftpsync SRC DST")
@@ -40,15 +40,8 @@ var rootCmd = cobra.Command{
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&rootDir, "root", "/", "remote path to sync")
-	rootCmd.PersistentFlags().StringVar(&dbLocation, "database", "ftpsync.db", "path to database")
-	rootCmd.PersistentFlags().StringVar(&dirModeStr, "dir-mode", "0777", "mode for directories")
-	rootCmd.PersistentFlags().StringVar(&fileModeStr, "file-mode", "0666", "mode for files")
-}
-
-func main() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println("error: ", err)
-		os.Exit(1)
-	}
+	RootCmd.PersistentFlags().StringVar(&rootDir, "root", "/", "remote path to sync")
+	RootCmd.PersistentFlags().StringVar(&dbLocation, "database", "ftpsync.db", "path to database")
+	RootCmd.PersistentFlags().StringVar(&dirModeStr, "dir-mode", "0777", "mode for directories")
+	RootCmd.PersistentFlags().StringVar(&fileModeStr, "file-mode", "0666", "mode for files")
 }

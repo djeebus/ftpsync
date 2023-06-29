@@ -2,6 +2,7 @@ package lib
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/pkg/errors"
@@ -18,20 +19,42 @@ type Processor struct {
 }
 
 type FileStatusKey struct {
-	HasFtp, HasDb, HasLocal bool
+	HasRemote, IsRecorded, HasLocal bool
+}
+
+func (key FileStatusKey) String() string {
+	return fmt.Sprintf(
+		"remote:%s, record:%s, local:%s",
+		strconv.FormatBool(key.HasRemote),
+		strconv.FormatBool(key.IsRecorded),
+		strconv.FormatBool(key.HasLocal),
+	)
+}
+
+func (key FileStatusKey) InSync() bool {
+	return key.HasRemote && key.IsRecorded && key.HasLocal
 }
 
 type TruthAction func(FileStatusKey, *Processor, string) error
+type NamedAction struct {
+	Action TruthAction
+	Name   string
+}
 
-var fileStatusActions = map[FileStatusKey]TruthAction{
-	{true, false, false}:  downloadFile,
-	{true, true, false}:   skipFile,
-	{true, true, true}:    skipFile,
-	{false, true, false}:  deleteFile,
-	{false, true, true}:   deleteFile,
-	{false, false, true}:  deleteFile,
-	{false, false, false}: logFile,
-	{true, false, true}:   recordFile,
+var fileStatusActions = map[FileStatusKey]NamedAction{
+	{true, false, false}:  {downloadFile, "download"},
+	{true, true, false}:   {skipFile, "skip"},
+	{true, true, true}:    {skipFile, "skip"},
+	{false, true, false}:  {deleteFile, "delete"},
+	{false, true, true}:   {deleteFile, "delete"},
+	{false, false, true}:  {deleteFile, "delete"},
+	{false, false, false}: {logFile, "log"},
+	{true, false, true}:   {recordFile, "record"},
+}
+
+func echo(format string, a ...any) {
+	msg := fmt.Sprintf(format, a...)
+	fmt.Println(msg)
 }
 
 func (p *Processor) Process(rootPath string) error {
@@ -46,16 +69,20 @@ func (p *Processor) Process(rootPath string) error {
 	if ftpFiles, err = p.src.GetAllFiles(rootPath); err != nil {
 		return errors.Wrap(err, "failed to get ftp files")
 	}
+	echo("found %d remote files", ftpFiles.Len())
 
 	if dbFiles, err = p.db.GetAllFiles(rootPath); err != nil {
 		return errors.Wrap(err, "failed to get database files")
 	}
+	echo("found %d recorded files", dbFiles.Len())
 
 	if localFiles, err = p.dst.GetAllFiles(rootPath); err != nil {
 		return errors.Wrap(err, "failed to get local files")
 	}
+	echo("found %d local files", localFiles.Len())
 
 	allFiles := NewSet().Union(ftpFiles).Union(dbFiles).Union(localFiles)
+	echo("found a combined total of %d files", allFiles.Len())
 
 	for _, file := range allFiles.ToList() {
 		hasFtpFile := ftpFiles.Has(file)
@@ -63,12 +90,21 @@ func (p *Processor) Process(rootPath string) error {
 		hasLocalFile := localFiles.Has(file)
 
 		key := FileStatusKey{
-			HasDb:    hasDbFile,
-			HasFtp:   hasFtpFile,
-			HasLocal: hasLocalFile,
+			IsRecorded: hasDbFile,
+			HasRemote:  hasFtpFile,
+			HasLocal:   hasLocalFile,
 		}
 		action := fileStatusActions[key]
-		if err = action(key, p, file); err != nil {
+
+		if !(key.InSync()) {
+			echo("%s out of sync (%s), action = %s",
+				file,
+				key.String(),
+				action.Name,
+			)
+		}
+
+		if err = action.Action(key, p, file); err != nil {
 			return errors.Wrapf(err, "failed to perform action for %s", file)
 		}
 	}
@@ -77,7 +113,7 @@ func (p *Processor) Process(rootPath string) error {
 }
 
 func downloadFile(key FileStatusKey, p *Processor, path string) error {
-	fmt.Printf("+++ downloading %s ... ", path)
+	echo("+++ downloading %s ... ", path)
 	fp, err := p.src.Read(path)
 	if err != nil {
 		return errors.Wrapf(err, "failed to read %s", path)
@@ -89,7 +125,7 @@ func downloadFile(key FileStatusKey, p *Processor, path string) error {
 		return errors.Wrapf(err, "failed to write %s", path)
 	}
 	done := time.Since(start)
-	fmt.Printf("%s in %d seconds, %s\n", fmtSize(bytes), int64(done.Seconds()), fmtSpeed(bytes, done))
+	echo("%s in %d seconds, %s", fmtSize(bytes), int64(done.Seconds()), fmtSpeed(bytes, done))
 	if err = p.db.Record(path); err != nil {
 		return errors.Wrapf(err, "failed to record %s", path)
 	}
@@ -98,7 +134,7 @@ func downloadFile(key FileStatusKey, p *Processor, path string) error {
 }
 
 func recordFile(key FileStatusKey, p *Processor, path string) error {
-	fmt.Printf("@@@ recording %s", path)
+	echo("@@@ recording %s", path)
 	if err := p.db.Record(path); err != nil {
 		return errors.Wrapf(err, "failed to record %s", path)
 	}
@@ -111,15 +147,15 @@ func skipFile(key FileStatusKey, p *Processor, path string) error {
 }
 
 func deleteFile(key FileStatusKey, p *Processor, path string) error {
-	if key.HasDb {
-		fmt.Printf("@@@ deleting %s from the database\n", path)
+	if key.IsRecorded {
+		echo("@@@ deleting %s from the database", path)
 		if err := p.db.Delete(path); err != nil {
 			return errors.Wrap(err, "error unrecording file")
 		}
 	}
 
 	if key.HasLocal {
-		fmt.Printf("--- deleting %s from the file system\n", path)
+		echo("--- deleting %s from the file system", path)
 		if err := p.dst.Delete(path); err != nil {
 			return errors.Wrap(err, "error deleting file")
 		}
@@ -129,7 +165,7 @@ func deleteFile(key FileStatusKey, p *Processor, path string) error {
 }
 
 func logFile(key FileStatusKey, p *Processor, path string) error {
-	fmt.Printf("!!! file %s is in a weird state: [ftp: %t, db: %t, local: %t],  !!!\n", path, key.HasFtp, key.HasDb, key.HasLocal)
+	echo("!!! file %s is in a weird state: [ftp: %t, db: %t, local: %t],  !!!", path, key.HasRemote, key.IsRecorded, key.HasLocal)
 	return nil
 }
 

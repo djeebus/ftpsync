@@ -38,6 +38,10 @@ func (l *destination) GetAllFiles(rootPath string) (*lib.Set, error) {
 	files := lib.NewSet()
 	if err := fs.WalkDir(fsys, rootPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+
 			return errors.Wrapf(err, "error at %s", path)
 		}
 

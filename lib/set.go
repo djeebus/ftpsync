@@ -17,6 +17,10 @@ func (s *Set) Has(key string) bool {
 	return ok
 }
 
+func (s *Set) Len() int {
+	return len(s.m)
+}
+
 func (s *Set) Set(key string) {
 	s.m[key] = struct{}{}
 }
