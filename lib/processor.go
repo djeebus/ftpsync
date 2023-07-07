@@ -61,9 +61,9 @@ func (p *Processor) Process(rootPath string) error {
 	var (
 		err error
 
-		ftpFiles   *Set
+		ftpFiles   *SizeSet
 		dbFiles    *Set
-		localFiles *Set
+		localFiles *SizeSet
 	)
 
 	if ftpFiles, err = p.src.GetAllFiles(rootPath); err != nil {
@@ -81,13 +81,21 @@ func (p *Processor) Process(rootPath string) error {
 	}
 	echo("found %d local files", localFiles.Len())
 
-	allFiles := NewSet().Union(ftpFiles).Union(dbFiles).Union(localFiles)
+	allFiles := NewSet().Union(ftpFiles.ToSet()).Union(dbFiles).Union(localFiles.ToSet())
 	echo("found a combined total of %d files", allFiles.Len())
 
 	for _, file := range allFiles.ToList() {
-		hasFtpFile := ftpFiles.Has(file)
 		hasDbFile := dbFiles.Has(file)
-		hasLocalFile := localFiles.Has(file)
+		localSize, hasLocalFile := localFiles.Get(file)
+		remoteSize, hasFtpFile := ftpFiles.Get(file)
+		if hasLocalFile && hasFtpFile && localSize != remoteSize {
+			echo("local file out of sync from remote file, deleting")
+			if err := p.dst.Delete(file); err != nil {
+				echo("failed to delete local file: %v", err)
+				continue
+			}
+			hasLocalFile = false
+		}
 
 		key := FileStatusKey{
 			IsRecorded: hasDbFile,
@@ -109,10 +117,14 @@ func (p *Processor) Process(rootPath string) error {
 		}
 	}
 
+	if err = p.dst.CleanDirectories(rootPath); err != nil {
+		return errors.Wrap(err, "failed to clean directories")
+	}
+
 	return nil
 }
 
-func downloadFile(key FileStatusKey, p *Processor, path string) error {
+func downloadFile(_ FileStatusKey, p *Processor, path string) error {
 	echo("+++ downloading %s ... ", path)
 	fp, err := p.src.Read(path)
 	if err != nil {
@@ -133,7 +145,7 @@ func downloadFile(key FileStatusKey, p *Processor, path string) error {
 	return nil
 }
 
-func recordFile(key FileStatusKey, p *Processor, path string) error {
+func recordFile(_ FileStatusKey, p *Processor, path string) error {
 	echo("@@@ recording %s", path)
 	if err := p.db.Record(path); err != nil {
 		return errors.Wrapf(err, "failed to record %s", path)
@@ -142,7 +154,7 @@ func recordFile(key FileStatusKey, p *Processor, path string) error {
 	return nil
 }
 
-func skipFile(key FileStatusKey, p *Processor, path string) error {
+func skipFile(_ FileStatusKey, _ *Processor, _ string) error {
 	return nil
 }
 
@@ -164,7 +176,7 @@ func deleteFile(key FileStatusKey, p *Processor, path string) error {
 	return nil
 }
 
-func logFile(key FileStatusKey, p *Processor, path string) error {
+func logFile(key FileStatusKey, _ *Processor, path string) error {
 	echo("!!! file %s is in a weird state: [ftp: %t, db: %t, local: %t],  !!!", path, key.HasRemote, key.IsRecorded, key.HasLocal)
 	return nil
 }

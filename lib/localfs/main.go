@@ -27,15 +27,20 @@ type destination struct {
 	root     string
 }
 
-func (l *destination) GetAllFiles(rootPath string) (*lib.Set, error) {
+func (l *destination) getFsys(rootPath string) fs.FS {
 	// so much trimming required to get FS to work
 	root := strings.TrimRight(l.root, "/")
+	fsys := os.DirFS(root)
+	return fsys
+}
+
+func (l *destination) GetAllFiles(rootPath string) (*lib.SizeSet, error) {
+	fsys := l.getFsys(rootPath)
+
 	rootPath = strings.TrimLeft(rootPath, "/")
 	rootPath = strings.TrimRight(rootPath, "/")
 
-	fsys := os.DirFS(root)
-
-	files := lib.NewSet()
+	files := lib.NewSizeSet()
 	if err := fs.WalkDir(fsys, rootPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -49,7 +54,12 @@ func (l *destination) GetAllFiles(rootPath string) (*lib.Set, error) {
 			return nil
 		}
 
-		files.Set("/" + path)
+		info, err := d.Info()
+		if err != nil {
+			return errors.Wrapf(err, "failed to read info %s", path)
+		}
+
+		files.Set("/"+path, info.Size())
 		return nil
 	}); err != nil {
 		return nil, errors.Wrapf(err, "failed to walk [%s, %s]", l.root, rootPath)
@@ -122,6 +132,48 @@ func (l *destination) Write(path string, fp io.ReadCloser) (int64, error) {
 	}
 
 	return size, nil
+}
+
+func (l *destination) cleanDirectories(path string) (isDeleted bool, err error) {
+	var (
+		hasChildren bool
+		wasDeleted  bool
+	)
+
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to read %s", path)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			dirPath := filepath.Join(path, entry.Name())
+			wasDeleted, err = l.cleanDirectories(dirPath)
+			if err != nil {
+				return false, errors.Wrapf(err, "failed to clean %s", dirPath)
+			}
+			if wasDeleted {
+				continue
+			}
+		}
+
+		hasChildren = true
+	}
+
+	if hasChildren {
+		return false, nil
+	}
+
+	if err = os.Remove(path); err != nil {
+		return false, errors.Wrapf(err, "failed to remove %s", path)
+	}
+
+	return true, nil
+}
+
+func (l *destination) CleanDirectories(path string) error {
+	_, err := l.cleanDirectories(path)
+	return err
 }
 
 var _ lib.Destination = new(destination)

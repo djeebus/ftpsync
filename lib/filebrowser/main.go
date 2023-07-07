@@ -89,7 +89,7 @@ func (f *source) Login(username, password string) error {
 	return nil
 }
 
-func (f *source) GetAllFiles(path string) (*lib.Set, error) {
+func (f *source) GetAllFiles(path string) (*lib.SizeSet, error) {
 	return lib.WalkLister(f, path)
 }
 
@@ -142,7 +142,9 @@ func (f *source) List(path string) (lib.ListResult, error) {
 			result.Folders = append(result.Folders, entry.Name)
 		} else if entry.IsSymlink {
 		} else {
-			result.Files = append(result.Files, entry.Name)
+			for path, size := range result.Files {
+				result.Files[path] = size
+			}
 		}
 	}
 

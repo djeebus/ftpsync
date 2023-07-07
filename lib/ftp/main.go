@@ -46,7 +46,7 @@ type source struct {
 	conn *ftp.ServerConn
 }
 
-func (f *source) GetAllFiles(path string) (*lib.Set, error) {
+func (f *source) GetAllFiles(path string) (*lib.SizeSet, error) {
 	return lib.WalkLister(f, path)
 }
 
@@ -73,7 +73,7 @@ func (f *source) List(path string) (lib.ListResult, error) {
 		case ftp.EntryTypeFolder:
 			result.Folders = append(result.Folders, entryPath)
 		case ftp.EntryTypeFile:
-			result.Files = append(result.Files, entryPath)
+			result.Files[entryPath] = int64(entry.Size)
 		case ftp.EntryTypeLink:
 			// TODO: implement link handling
 			continue

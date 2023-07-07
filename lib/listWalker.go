@@ -7,7 +7,7 @@ import (
 )
 
 type ListResult struct {
-	Files   []string
+	Files   map[string]int64
 	Folders []string
 }
 
@@ -15,8 +15,8 @@ type Lister interface {
 	List(path string) (ListResult, error)
 }
 
-func WalkLister(lister Lister, rootPath string) (*Set, error) {
-	result := NewSet()
+func WalkLister(lister Lister, rootPath string) (*SizeSet, error) {
+	result := NewSizeSet()
 
 	work := Queue[string]{MaxSize: 1000}
 	work.Enqueue(rootPath)
@@ -34,9 +34,9 @@ func WalkLister(lister Lister, rootPath string) (*Set, error) {
 			work.Enqueue(fullpath)
 		}
 
-		for _, f := range results.Files {
-			fullPath := filepath.Join(path, f)
-			result.Set(fullPath)
+		for filename, size := range results.Files {
+			fullPath := filepath.Join(path, filename)
+			result.Set(fullPath, size)
 		}
 	}
 
