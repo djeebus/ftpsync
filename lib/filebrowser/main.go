@@ -94,7 +94,7 @@ func (f *source) GetAllFiles(path string) (*lib.SizeSet, error) {
 }
 
 func (f *source) List(path string) (lib.ListResult, error) {
-	var result lib.ListResult
+	result := lib.NewListResult()
 
 	apiPath := strings.TrimLeft(path, "/")
 	apiPath = filepath.Join("/api/resources", apiPath)
@@ -129,6 +129,7 @@ func (f *source) List(path string) (lib.ListResult, error) {
 			IsSymlink bool   `json:"isSymlink"`
 			Name      string `json:"name"`
 			Path      string `json:"path"`
+			Size      int64  `json:"size"`
 		} `json:"items"`
 		Name string `json:"name"`
 		Path string `json:"path"`
@@ -142,9 +143,7 @@ func (f *source) List(path string) (lib.ListResult, error) {
 			result.Folders = append(result.Folders, entry.Name)
 		} else if entry.IsSymlink {
 		} else {
-			for path, size := range result.Files {
-				result.Files[path] = size
-			}
+			result.Files[entry.Name] = entry.Size
 		}
 	}
 

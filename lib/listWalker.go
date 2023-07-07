@@ -11,6 +11,12 @@ type ListResult struct {
 	Folders []string
 }
 
+func NewListResult() ListResult {
+	return ListResult{
+		Files: make(map[string]int64),
+	}
+}
+
 type Lister interface {
 	List(path string) (ListResult, error)
 }

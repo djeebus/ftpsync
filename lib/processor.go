@@ -13,9 +13,9 @@ func BuildProcessor(src Source, db Database, dst Destination) *Processor {
 }
 
 type Processor struct {
-	src Source
-	db  Database
-	dst Destination
+	remote Source
+	db     Database
+	local  Destination
 }
 
 type FileStatusKey struct {
@@ -61,36 +61,36 @@ func (p *Processor) Process(rootPath string) error {
 	var (
 		err error
 
-		ftpFiles   *SizeSet
-		dbFiles    *Set
-		localFiles *SizeSet
+		remoteFiles *SizeSet
+		dbFiles     *Set
+		localFiles  *SizeSet
 	)
 
-	if ftpFiles, err = p.src.GetAllFiles(rootPath); err != nil {
+	if remoteFiles, err = p.remote.GetAllFiles(rootPath); err != nil {
 		return errors.Wrap(err, "failed to get ftp files")
 	}
-	echo("found %d remote files", ftpFiles.Len())
+	echo("found %d remote files", remoteFiles.Len())
 
 	if dbFiles, err = p.db.GetAllFiles(rootPath); err != nil {
 		return errors.Wrap(err, "failed to get database files")
 	}
 	echo("found %d recorded files", dbFiles.Len())
 
-	if localFiles, err = p.dst.GetAllFiles(rootPath); err != nil {
+	if localFiles, err = p.local.GetAllFiles(rootPath); err != nil {
 		return errors.Wrap(err, "failed to get local files")
 	}
 	echo("found %d local files", localFiles.Len())
 
-	allFiles := NewSet().Union(ftpFiles.ToSet()).Union(dbFiles).Union(localFiles.ToSet())
+	allFiles := NewSet().Union(remoteFiles.ToSet()).Union(dbFiles).Union(localFiles.ToSet())
 	echo("found a combined total of %d files", allFiles.Len())
 
 	for _, file := range allFiles.ToList() {
 		hasDbFile := dbFiles.Has(file)
 		localSize, hasLocalFile := localFiles.Get(file)
-		remoteSize, hasFtpFile := ftpFiles.Get(file)
-		if hasLocalFile && hasFtpFile && localSize != remoteSize {
+		remoteSize, hasRemoteFile := remoteFiles.Get(file)
+		if hasLocalFile && hasRemoteFile && localSize != remoteSize {
 			echo("local file out of sync from remote file, deleting")
-			if err := p.dst.Delete(file); err != nil {
+			if err := p.local.Delete(file); err != nil {
 				echo("failed to delete local file: %v", err)
 				continue
 			}
@@ -99,7 +99,7 @@ func (p *Processor) Process(rootPath string) error {
 
 		key := FileStatusKey{
 			IsRecorded: hasDbFile,
-			HasRemote:  hasFtpFile,
+			HasRemote:  hasRemoteFile,
 			HasLocal:   hasLocalFile,
 		}
 		action := fileStatusActions[key]
@@ -117,7 +117,7 @@ func (p *Processor) Process(rootPath string) error {
 		}
 	}
 
-	if err = p.dst.CleanDirectories(rootPath); err != nil {
+	if err = p.local.CleanDirectories(rootPath); err != nil {
 		return errors.Wrap(err, "failed to clean directories")
 	}
 
@@ -126,13 +126,13 @@ func (p *Processor) Process(rootPath string) error {
 
 func downloadFile(_ FileStatusKey, p *Processor, path string) error {
 	echo("+++ downloading %s ... ", path)
-	fp, err := p.src.Read(path)
+	fp, err := p.remote.Read(path)
 	if err != nil {
 		return errors.Wrapf(err, "failed to read %s", path)
 	}
 
 	start := time.Now()
-	bytes, err := p.dst.Write(path, fp)
+	bytes, err := p.local.Write(path, fp)
 	if err != nil {
 		return errors.Wrapf(err, "failed to write %s", path)
 	}
@@ -168,7 +168,7 @@ func deleteFile(key FileStatusKey, p *Processor, path string) error {
 
 	if key.HasLocal {
 		echo("--- deleting %s from the file system", path)
-		if err := p.dst.Delete(path); err != nil {
+		if err := p.local.Delete(path); err != nil {
 			return errors.Wrap(err, "error deleting file")
 		}
 	}

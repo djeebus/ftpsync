@@ -57,7 +57,7 @@ func (f *source) toRemotePath(path string) string {
 }
 
 func (f *source) List(path string) (lib.ListResult, error) {
-	var result lib.ListResult
+	result := lib.NewListResult()
 
 	rootPath := f.toRemotePath(path)
 
