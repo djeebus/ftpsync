@@ -3,6 +3,10 @@ package cmd
 import (
 	"net/url"
 	"os"
+	"os/user"
+	"regexp"
+	"strconv"
+	"sync"
 
 	"github.com/pkg/errors"
 
@@ -12,6 +16,79 @@ import (
 	"github.com/djeebus/ftpsync/lib/localfs"
 	"github.com/djeebus/ftpsync/lib/sqlite"
 )
+
+var allNumbers = regexp.MustCompile(`^\d+$`)
+
+func parseFsMode(mode string) (os.FileMode, error) {
+	mode64, err := strconv.ParseInt(mode, 8, 32)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to parse mode")
+	}
+	return os.FileMode(mode64), nil
+}
+
+type lookupName func(name string) (string, error)
+
+func parseId(id string, lookupName lookupName) (int, error) {
+	var err error
+
+	if !allNumbers.MatchString(id) {
+		id, err = lookupName(id)
+	}
+
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to lookup id")
+	}
+
+	return strconv.Atoi(id)
+}
+
+var (
+	currentUserOnce sync.Once
+	currentUser     *user.User
+)
+
+func getCurrentUser() *user.User {
+	currentUserOnce.Do(func() {
+		u, err := user.Current()
+		if err != nil {
+			panic(err)
+		}
+		currentUser = u
+
+	})
+
+	return currentUser
+}
+
+func parseUser(userID string) (int, error) {
+	if userID == "" {
+		userID = getCurrentUser().Uid
+	}
+
+	return parseId(userID, func(name string) (string, error) {
+		if u, err := user.Lookup(name); err != nil {
+			return "", errors.Wrapf(err, "failed to lookup '%s' user", name)
+		} else {
+			return u.Uid, nil
+		}
+	})
+}
+
+func parseGroup(groupId string) (int, error) {
+	if groupId == "" {
+		groupId = getCurrentUser().Gid
+	}
+
+	return parseId(groupId, func(name string) (string, error) {
+		if g, err := user.LookupGroup(name); err != nil {
+			return "", errors.Wrapf(err, "failed to lookup '%s' group", name)
+		} else {
+			return g.Gid, nil
+		}
+
+	})
+}
 
 func doSync(src, dst string) error {
 
@@ -24,6 +101,9 @@ func doSync(src, dst string) error {
 
 		dirMode  os.FileMode
 		fileMode os.FileMode
+
+		fileUserID  int
+		fileGroupID int
 	)
 
 	srcURL, err = srcURL.Parse(src)
@@ -36,6 +116,12 @@ func doSync(src, dst string) error {
 	}
 	if dirMode, err = parseFsMode(dirModeStr); err != nil {
 		return errors.Wrap(err, "failed to parse dir mode")
+	}
+	if fileUserID, err = parseUser(fileUserStr); err != nil {
+		return errors.Wrap(err, "failed to parse file mode")
+	}
+	if fileGroupID, err = parseGroup(fileGroupStr); err != nil {
+		return errors.Wrap(err, "failed to parse group id")
 	}
 
 	switch srcURL.Scheme {
@@ -52,7 +138,7 @@ func doSync(src, dst string) error {
 	if database, err = sqlite.New(dbLocation); err != nil {
 		return errors.Wrap(err, "failed to build database")
 	}
-	if destination, err = localfs.New(dst, dirMode, fileMode); err != nil {
+	if destination, err = localfs.New(dst, dirMode, fileMode, fileUserID, fileGroupID); err != nil {
 		return errors.Wrap(err, "failed to build destination")
 	}
 

@@ -3,26 +3,21 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
 var (
-	rootDir     string
-	dbLocation  string
-	dirModeStr  string
-	fileModeStr string
+	rootDir      string
+	dbLocation   string
+	dirModeStr   string
+	fileModeStr  string
+	dirUserStr   string
+	dirGroupStr  string
+	fileGroupStr string
+	fileUserStr  string
 )
-
-func parseFsMode(mode string) (os.FileMode, error) {
-	mode64, err := strconv.ParseInt(mode, 8, 32)
-	if err != nil {
-		return 0, errors.Wrap(err, "failed to parse mode")
-	}
-	return os.FileMode(mode64), nil
-}
 
 var RootCmd = cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -44,4 +39,8 @@ func init() {
 	RootCmd.PersistentFlags().StringVar(&dbLocation, "database", "ftpsync.db", "path to database")
 	RootCmd.PersistentFlags().StringVar(&dirModeStr, "dir-mode", "0777", "mode for directories")
 	RootCmd.PersistentFlags().StringVar(&fileModeStr, "file-mode", "0666", "mode for files")
+	RootCmd.PersistentFlags().StringVar(&dirUserStr, "dir-user", "", "user for directories")
+	RootCmd.PersistentFlags().StringVar(&fileUserStr, "file-user", "", "user for files")
+	RootCmd.PersistentFlags().StringVar(&dirGroupStr, "dir-group", "", "group for directorie")
+	RootCmd.PersistentFlags().StringVar(&fileGroupStr, "file-group", "", "group for files")
 }

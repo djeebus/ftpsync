@@ -13,21 +13,27 @@ import (
 	"github.com/djeebus/ftpsync/lib"
 )
 
-func New(dst string, dirMode, fileMode fs.FileMode) (lib.Destination, error) {
+func New(dst string, dirMode, fileMode fs.FileMode, fileUserID, fileGroupID int) (lib.Destination, error) {
 	return &destination{
-		root:     dst,
-		dirMode:  dirMode,
-		fileMode: fileMode,
+		root:        dst,
+		dirMode:     dirMode,
+		fileMode:    fileMode,
+		fileUserID:  fileUserID,
+		fileGroupID: fileGroupID,
 	}, nil
 }
 
 type destination struct {
 	dirMode  fs.FileMode
 	fileMode fs.FileMode
-	root     string
+
+	fileUserID  int
+	fileGroupID int
+
+	root string
 }
 
-func (l *destination) getFsys(rootPath string) fs.FS {
+func (l *destination) getFsys() fs.FS {
 	// so much trimming required to get FS to work
 	root := strings.TrimRight(l.root, "/")
 	fsys := os.DirFS(root)
@@ -35,7 +41,7 @@ func (l *destination) getFsys(rootPath string) fs.FS {
 }
 
 func (l *destination) GetAllFiles(rootPath string) (*lib.SizeSet, error) {
-	fsys := l.getFsys(rootPath)
+	fsys := l.getFsys()
 
 	rootPath = strings.TrimLeft(rootPath, "/")
 	rootPath = strings.TrimRight(rootPath, "/")
@@ -129,6 +135,10 @@ func (l *destination) Write(path string, fp io.ReadCloser) (int64, error) {
 
 	if err = os.Chmod(path, l.fileMode); err != nil {
 		return 0, errors.Wrap(err, "failed to set the mode")
+	}
+
+	if err = os.Chown(path, l.fileUserID, l.fileGroupID); err != nil {
+		return 0, errors.Wrap(err, "failed to set file owner")
 	}
 
 	return size, nil
