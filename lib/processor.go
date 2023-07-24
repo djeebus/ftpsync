@@ -45,7 +45,7 @@ type NamedAction struct {
 
 var fileStatusActions = map[FileStatusKey]NamedAction{
 	{true, false, false}:  {downloadFile, "download"},
-	{true, true, false}:   {skipFile, "skip"},
+	{true, true, false}:   {downloadFile, "download"},
 	{true, true, true}:    {skipFile, "skip"},
 	{false, true, false}:  {deleteFile, "delete"},
 	{false, true, true}:   {deleteFile, "delete"},
