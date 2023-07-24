@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 
 	"github.com/djeebus/ftpsync/lib"
 	"github.com/djeebus/ftpsync/lib/filebrowser"
@@ -90,8 +91,11 @@ func parseGroup(groupId string) (int, error) {
 	})
 }
 
-func doSync(src, dst string) error {
+func parseLogLevel(logLevelStr string) (logrus.Level, error) {
+	return logrus.ParseLevel(logLevelStr)
+}
 
+func doSync(src, dst string, log logrus.FieldLogger) error {
 	var (
 		err         error
 		srcURL      *url.URL
@@ -106,7 +110,7 @@ func doSync(src, dst string) error {
 		fileGroupID int
 	)
 
-	srcURL, err = srcURL.Parse(src)
+	srcURL, err = url.Parse(src)
 	if err != nil {
 		return errors.Wrap(err, "fail to parse url")
 	}
@@ -133,6 +137,8 @@ func doSync(src, dst string) error {
 		if source, err = filebrowser.New(srcURL); err != nil {
 			return errors.Wrap(err, "failed to build filebrowser source")
 		}
+	default:
+		return errors.New("unknown source")
 	}
 
 	if database, err = sqlite.New(dbLocation); err != nil {
@@ -142,6 +148,6 @@ func doSync(src, dst string) error {
 		return errors.Wrap(err, "failed to build destination")
 	}
 
-	processor := lib.BuildProcessor(source, database, destination)
+	processor := lib.BuildProcessor(source, database, destination, log)
 	return processor.Process(rootDir)
 }
