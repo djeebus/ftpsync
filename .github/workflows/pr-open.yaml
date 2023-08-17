@@ -9,8 +9,8 @@ on:
       - synchronize
 
 env:
-  FS_IMAGE: ghcr.io/${{ github.repository }}
-  FS_TAG: pr-${{ github.event.pull_request.number }}
+  FS_IMAGE: ttl.sh/${{ github.repository }}
+  FS_TAG: 24h
 
 jobs:
   docker:
@@ -22,15 +22,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-
-      - name: Delete image, if it exists
-        uses: bots-house/ghcr-delete-image-action@v1.1.0
-        with:
-          tag: ${{ env.FS_TAG }}
-          owner: ${{ github.repository_owner }}
-          name: ftpsync
-          token: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
 
       - uses: ./.github/actions/build-image
         with:
