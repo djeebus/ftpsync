@@ -19,6 +19,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      pull-requests: write
 
     steps:
       - uses: actions/checkout@v3
@@ -28,3 +29,8 @@ jobs:
           image: ${{ env.FS_IMAGE }}
           tag: ${{ env.FS_TAG }}
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: mshick/add-pr-comment@v2
+        with:
+          message: |
+            Temporary image available at `${{ env.FS_IMAGE }}:${{ env.FS_TAG }}` for 24 hours. If you need another built, close and reopen the PR.
