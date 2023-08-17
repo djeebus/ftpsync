@@ -9,7 +9,7 @@ on:
       - synchronize
 
 env:
-  FS_IMAGE: ttl.sh/${{ github.repository }}
+  FS_IMAGE: ttl.sh/${{ github.repository }}/pr-${{ github.event.pull_request.number }}
   FS_TAG: 24h
 
 jobs:
