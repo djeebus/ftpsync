@@ -9,8 +9,8 @@ on:
       - synchronize
 
 env:
-  FS_IMAGE: ghcr.io/${{ github.repository }}
-  FS_TAG: pr-${{ github.event.pull_request.number }}
+  FS_IMAGE: ttl.sh/${{ github.repository }}/pr-${{ github.event.pull_request.number }}/${{ github.event.pull_request.head.sha }}
+  FS_TAG: 24h
 
 jobs:
   docker:
@@ -19,21 +19,18 @@ jobs:
     permissions:
       contents: read
       packages: write
+      pull-requests: write
 
     steps:
       - uses: actions/checkout@v3
-
-      - name: Delete image, if it exists
-        uses: bots-house/ghcr-delete-image-action@v1.1.0
-        with:
-          tag: ${{ env.FS_TAG }}
-          owner: ${{ github.repository_owner }}
-          name: ftpsync
-          token: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
 
       - uses: ./.github/actions/build-image
         with:
           image: ${{ env.FS_IMAGE }}
           tag: ${{ env.FS_TAG }}
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: mshick/add-pr-comment@v2
+        with:
+          message: |
+            Temporary image available at `${{ env.FS_IMAGE }}:${{ env.FS_TAG }}` for 24 hours. If you need another built, close and reopen the PR.
