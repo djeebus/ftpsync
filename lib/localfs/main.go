@@ -182,7 +182,10 @@ func (l *destination) cleanDirectories(path string) (isDeleted bool, err error) 
 }
 
 func (l *destination) CleanDirectories(path string) error {
+	path = l.toLocalPath(path)
+
 	_, err := l.cleanDirectories(path)
+
 	return err
 }
 
