@@ -150,8 +150,6 @@ func (l *destination) cleanDirectories(path string) (isDeleted bool, err error) 
 		wasDeleted  bool
 	)
 
-	path = l.toLocalPath(path)
-
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		return false, errors.Wrapf(err, "failed to read %s", path)
@@ -184,7 +182,10 @@ func (l *destination) cleanDirectories(path string) (isDeleted bool, err error) 
 }
 
 func (l *destination) CleanDirectories(path string) error {
+	path = l.toLocalPath(path)
+
 	_, err := l.cleanDirectories(path)
+
 	return err
 }
 
