@@ -7,6 +7,10 @@ type Source interface {
 	GetAllFiles(path string) (*SizeSet, error)
 }
 
+type Precheck interface {
+	IsFileReady(path string) (bool, error)
+}
+
 type Destination interface {
 	GetAllFiles(path string) (*SizeSet, error)
 	Delete(path string) error

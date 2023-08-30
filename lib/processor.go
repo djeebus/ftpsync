@@ -9,15 +9,16 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func BuildProcessor(src Source, db Database, dst Destination, log logrus.FieldLogger) *Processor {
-	return &Processor{src, db, dst, log}
+func BuildProcessor(src Source, db Database, precheck Precheck, dst Destination, log logrus.FieldLogger) *Processor {
+	return &Processor{src, db, dst, precheck, log}
 }
 
 type Processor struct {
-	remote Source
-	db     Database
-	local  Destination
-	log    logrus.FieldLogger
+	remote   Source
+	db       Database
+	local    Destination
+	precheck Precheck
+	log      logrus.FieldLogger
 }
 
 type FileStatusKey struct {
@@ -123,6 +124,22 @@ func (p *Processor) Process(rootPath string) error {
 
 func downloadFile(_ FileStatusKey, p *Processor, path string) error {
 	log := p.log.WithField("path", path)
+
+	if p.precheck != nil {
+		log.Info("checking to see if file should be downloaded")
+		ok, err := p.precheck.IsFileReady(path)
+		if err != nil {
+			return errors.Wrap(err, "failed to precheck file")
+		}
+
+		if !ok {
+			log.Info("skipping file, not yet ready")
+			return nil
+		}
+
+		log.Info("file is ready for download")
+	}
+
 	log.Info("downloading")
 
 	fp, err := p.remote.Read(path)
