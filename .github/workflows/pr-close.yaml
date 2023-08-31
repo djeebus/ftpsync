@@ -1,0 +1,26 @@
+# mostly from https://github.com/marketplace/actions/build-and-push-docker-images
+name: Delete temporary PR image
+
+on:
+  pull_request:
+    types:
+      - closed
+
+env:
+  FS_IMAGE: ghcr.io/${{ github.repository }}
+  FS_TAG: pr-${{ github.event.pull_request.number }}
+
+jobs:
+  docker:
+    runs-on: self-hosted
+
+    permissions:
+      packages: write
+
+    steps:
+      - name: Delete image, if it exists
+        uses: chipkent/action-cleanup-package@v1.0.1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          package-name: ${{ github.event.repository.name }}
+          tag: ${{ env.FS_TAG }}
