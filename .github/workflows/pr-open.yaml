@@ -16,6 +16,8 @@ jobs:
   docker:
     runs-on: self-hosted
 
+    concurrency: pr-${{ github.event.pull_request.number }}
+
     permissions:
       contents: read
       packages: write
