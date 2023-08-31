@@ -30,7 +30,7 @@ jobs:
           tag: ${{ env.FS_TAG }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: mshick/add-pr-comment@v2
+      - uses: marocchino/sticky-pull-request-comment@v2
         with:
           message: |
             Temporary image available at `${{ env.FS_IMAGE }}:${{ env.FS_TAG }}`.
