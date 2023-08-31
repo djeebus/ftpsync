@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/djeebus/ftpsync/lib/deluge"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
@@ -95,11 +96,13 @@ func parseLogLevel(logLevelStr string) (logrus.Level, error) {
 	return logrus.ParseLevel(logLevelStr)
 }
 
-func doSync(src, dst string, log logrus.FieldLogger) error {
+func doSync(src, pre, dst string, log logrus.FieldLogger) error {
 	var (
 		err         error
+		precheckURL *url.URL
 		srcURL      *url.URL
 		source      lib.Source
+		precheck    lib.Precheck
 		database    lib.Database
 		destination lib.Destination
 
@@ -109,6 +112,13 @@ func doSync(src, dst string, log logrus.FieldLogger) error {
 		fileUserID  int
 		fileGroupID int
 	)
+
+	if pre != "" {
+		precheckURL, err = url.Parse(pre)
+		if err != nil {
+			return errors.Wrap(err, "failed to parse precheck")
+		}
+	}
 
 	srcURL, err = url.Parse(src)
 	if err != nil {
@@ -141,6 +151,15 @@ func doSync(src, dst string, log logrus.FieldLogger) error {
 		return errors.New("unknown source")
 	}
 
+	switch precheckURL.Scheme {
+	case "deluge", "deluges":
+		if precheck, err = deluge.New(log, precheckURL, rootDir); err != nil {
+			if err != nil {
+				return errors.Wrap(err, "failed to create deluge precheck")
+			}
+		}
+	}
+
 	if database, err = sqlite.New(dbLocation); err != nil {
 		return errors.Wrap(err, "failed to build database")
 	}
@@ -148,6 +167,6 @@ func doSync(src, dst string, log logrus.FieldLogger) error {
 		return errors.Wrap(err, "failed to build destination")
 	}
 
-	processor := lib.BuildProcessor(source, database, destination, log)
+	processor := lib.BuildProcessor(source, database, precheck, destination, log)
 	return processor.Process(rootDir)
 }

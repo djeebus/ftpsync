@@ -1,12 +1,10 @@
 # mostly from https://github.com/marketplace/actions/build-and-push-docker-images
-name: Build and push image
+name: Delete temporary PR image
 
 on:
   pull_request:
     types:
-      - opened
-      - reopened
-      - synchronize
+      - closed
 
 env:
   FS_IMAGE: ghcr.io/${{ github.repository }}
@@ -19,20 +17,17 @@ jobs:
     concurrency: pr-${{ github.event.pull_request.number }}
 
     permissions:
-      contents: read
       packages: write
-      pull-requests: write
 
     steps:
-      - uses: actions/checkout@v3
-
-      - uses: ./.github/actions/build-image
+      - name: Delete image, if it exists
+        uses: chipkent/action-cleanup-package@v1.0.1
         with:
-          image: ${{ env.FS_IMAGE }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          package-name: ${{ github.event.repository.name }}
           tag: ${{ env.FS_TAG }}
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: marocchino/sticky-pull-request-comment@v2
         with:
           message: |
-            Temporary image available at `${{ env.FS_IMAGE }}:${{ env.FS_TAG }}`.
+            Temporary image deleted.
