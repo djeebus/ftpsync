@@ -153,7 +153,7 @@ func doSync(src, pre, dst string, log logrus.FieldLogger) error {
 
 	switch precheckURL.Scheme {
 	case "deluge", "deluges":
-		if precheck, err = deluge.New(precheckURL); err != nil {
+		if precheck, err = deluge.New(log, precheckURL); err != nil {
 			if err != nil {
 				return errors.Wrap(err, "failed to create deluge precheck")
 			}

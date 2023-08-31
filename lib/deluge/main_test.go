@@ -25,7 +25,7 @@ func TestCreation(t *testing.T) {
 	delugeUrl, err := url.Parse(delugeUrlText)
 	require.NoError(t, err)
 
-	precheck, err := New(delugeUrl)
+	precheck, err := New(nil, delugeUrl)
 	require.NoError(t, err)
 
 	isGood, err := precheck.IsFileReady(xferPath)
