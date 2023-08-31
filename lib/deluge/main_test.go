@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,7 +26,7 @@ func TestCreation(t *testing.T) {
 	delugeUrl, err := url.Parse(delugeUrlText)
 	require.NoError(t, err)
 
-	precheck, err := New(nil, delugeUrl)
+	precheck, err := New(logrus.New(), delugeUrl, "/testing/")
 	require.NoError(t, err)
 
 	isGood, err := precheck.IsFileReady(xferPath)
