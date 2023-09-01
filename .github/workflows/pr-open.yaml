@@ -1,5 +1,5 @@
 # mostly from https://github.com/marketplace/actions/build-and-push-docker-images
-name: Build and push image
+name: Build and push temporary image
 
 on:
   pull_request:
@@ -16,7 +16,7 @@ jobs:
   docker:
     runs-on: self-hosted
 
-    concurrency: pr-${{ github.event.pull_request.number }}
+    concurrency: ${{ env.FS_TAG }}
 
     permissions:
       contents: read
