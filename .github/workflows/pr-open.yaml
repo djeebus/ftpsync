@@ -37,3 +37,21 @@ jobs:
         with:
           message: |
             Temporary image available at `${{ env.FS_IMAGE }}:${{ env.FS_TAG }}`.
+
+  tests:
+    runs-on: self-hosted
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: wistia/parse-tool-versions@v1.0
+
+      - uses: earthly/actions-setup@v1
+        with: { version: "v${{ env.EARTHLY_TOOL_VERSION }}" }
+
+      - name: Build image
+        shell: bash
+        run: |
+          earthly \
+            +tests \
+              --GOLANG_VERSION=${{ env.GOLANG_TOOL_VERSION }}
