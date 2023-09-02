@@ -38,6 +38,8 @@ jobs:
         uses: Chizkiyahu/delete-untagged-ghcr-action@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          repository_owner: ${{ github.repository_owner }}
           package_name: ftpsync
-          owner_type: user
           untagged_only: true
+          owner_type: user
