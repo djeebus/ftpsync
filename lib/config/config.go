@@ -12,7 +12,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -109,11 +109,17 @@ func decodeLogrusLevel(f, t reflect.Type, data interface{}) (interface{}, error)
 	return data, nil
 }
 
-func ReadConfig(cmd *cobra.Command) (Config, error) {
-	var err error
-	var config Config
+func ReadConfig(flags *pflag.FlagSet) (Config, error) {
+	var (
+		err    error
+		config Config
+		v      = viper.New()
+	)
 
-	v := viper.New()
+	if err = v.BindPFlags(flags); err != nil {
+		return config, errors.Wrap(err, "failed to bind flags")
+	}
+
 	v.SetEnvPrefix("FTPSYNC")
 	v.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	v.AutomaticEnv()
@@ -130,12 +136,6 @@ func ReadConfig(cmd *cobra.Command) (Config, error) {
 		if err = v.ReadInConfig(); err != nil {
 			return config, errors.Wrap(err, "failed to read in config")
 		}
-	}
-
-	flags := cmd.PersistentFlags()
-	setupFlags(flags)
-	if err = v.BindPFlags(flags); err != nil {
-		return config, errors.Wrap(err, "failed to bind flags")
 	}
 
 	err = v.Unmarshal(&config, viper.DecodeHook(decodeLogrusLevel))

@@ -2,7 +2,7 @@ package config
 
 import "github.com/spf13/pflag"
 
-func setupFlags(flags *pflag.FlagSet) {
+func SetupFlags(flags *pflag.FlagSet) {
 	flags.String("source", "", "location from which to pull files")
 	flags.String("destination", "", "location to push files to")
 	flags.String("root-dir", "/", "remote path to sync")

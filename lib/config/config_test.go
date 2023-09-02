@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -41,8 +41,10 @@ func TestMarshalConfigFromEnv(t *testing.T) {
 	t.Setenv("FTPSYNC_FILE_USER_ID", "32")
 	t.Setenv("FTPSYNC_FILE_GROUP_ID", "33")
 
-	var cmd cobra.Command
-	c, err := ReadConfig(&cmd)
+	flags := pflag.NewFlagSet("a flag set", pflag.PanicOnError)
+	SetupFlags(flags)
+
+	c, err := ReadConfig(flags)
 	require.NoError(t, err)
 
 	assert.Equal(t, expectedMaxConfig, c)
@@ -76,8 +78,9 @@ source: test-source
 
 	t.Setenv("FTPSYNC_CONFIG", tempfile.Name())
 
-	var cmd cobra.Command
-	c, err := ReadConfig(&cmd)
+	flags := pflag.NewFlagSet("a flag set", pflag.PanicOnError)
+	SetupFlags(flags)
+	c, err := ReadConfig(flags)
 	require.NoError(t, err)
 
 	assert.Equal(t, expectedMaxConfig, c)

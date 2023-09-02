@@ -51,11 +51,13 @@ func doSync(config config.Config, log logrus.FieldLogger) error {
 		return errors.New("unknown source")
 	}
 
-	switch precheckURL.Scheme {
-	case "deluge", "deluges":
-		if precheck, err = deluge.New(log, precheckURL, config.RootDir); err != nil {
-			if err != nil {
-				return errors.Wrap(err, "failed to create deluge precheck")
+	if precheckURL != nil {
+		switch precheckURL.Scheme {
+		case "deluge", "deluges":
+			if precheck, err = deluge.New(log, precheckURL, config.RootDir); err != nil {
+				if err != nil {
+					return errors.Wrap(err, "failed to create deluge precheck")
+				}
 			}
 		}
 	}

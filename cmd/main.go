@@ -9,32 +9,34 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var RootCmd cobra.Command
-
-func init() {
-	RootCmd.RunE = func(cmd *cobra.Command, args []string) error {
-		config, err := config.ReadConfig(&RootCmd)
+var RootCmd = cobra.Command{
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, err := config.ReadConfig(cmd.PersistentFlags())
 		if err != nil {
 			return errors.Wrap(err, "failed to get config")
 		}
 
-		if config.Source == "" {
+		if cfg.Source == "" {
 			return errors.New("must define a source")
 		}
-		if config.Destination == "" {
+		if cfg.Destination == "" {
 			return errors.New("must define a precheck")
 		}
 
 		log := logrus.New()
-		log.SetLevel(config.LogLevel)
-		if strings.ToLower(config.LogFormat) == "json" {
+		log.SetLevel(cfg.LogLevel)
+		if strings.ToLower(cfg.LogFormat) == "json" {
 			log.SetFormatter(&logrus.JSONFormatter{})
 		}
 
-		if err = doSync(config, log); err != nil {
+		if err = doSync(cfg, log); err != nil {
 			log.WithError(err).Fatal("sync failed")
 		}
 
 		return nil
-	}
+	},
+}
+
+func init() {
+	config.SetupFlags(RootCmd.PersistentFlags())
 }
