@@ -8,18 +8,21 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/djeebus/ftpsync/lib/config"
 	"github.com/pkg/errors"
 
 	"github.com/djeebus/ftpsync/lib"
 )
 
-func New(dst string, dirMode, fileMode fs.FileMode, fileUserID, fileGroupID int) (lib.Destination, error) {
+func New(config config.Config) (lib.Destination, error) {
 	return &destination{
-		root:        dst,
-		dirMode:     dirMode,
-		fileMode:    fileMode,
-		fileUserID:  fileUserID,
-		fileGroupID: fileGroupID,
+		root:        config.Destination,
+		dirMode:     config.DirMode,
+		dirGroupID:  config.DirGroupID,
+		dirUserID:   config.DirUserID,
+		fileMode:    config.FileMode,
+		fileUserID:  config.FileUserID,
+		fileGroupID: config.FileGroupID,
 	}, nil
 }
 
@@ -27,8 +30,11 @@ type destination struct {
 	dirMode  fs.FileMode
 	fileMode fs.FileMode
 
-	fileUserID  int
-	fileGroupID int
+	fileUserID  config.UserID
+	fileGroupID config.GroupID
+
+	dirUserID  config.UserID
+	dirGroupID config.GroupID
 
 	root string
 }
@@ -115,6 +121,11 @@ func (l *destination) Write(path string, fp io.ReadCloser) (int64, error) {
 	if err = os.MkdirAll(dirname, l.dirMode); err != nil {
 		return 0, errors.Wrap(err, "failed to create directory")
 	}
+	if l.dirUserID != 0 && l.dirGroupID != 0 {
+		if err = os.Chown(dirname, int(l.dirUserID), int(l.dirGroupID)); err != nil {
+			return 0, errors.Wrap(err, "failed to chwon directory")
+		}
+	}
 
 	temppath, err := os.CreateTemp(dirname, "temp")
 	if err != nil {
@@ -137,8 +148,10 @@ func (l *destination) Write(path string, fp io.ReadCloser) (int64, error) {
 		return 0, errors.Wrap(err, "failed to set the mode")
 	}
 
-	if err = os.Chown(path, l.fileUserID, l.fileGroupID); err != nil {
-		return 0, errors.Wrap(err, "failed to set file owner")
+	if l.fileUserID != 0 && l.fileGroupID != 0 {
+		if err = os.Chown(path, int(l.fileUserID), int(l.fileGroupID)); err != nil {
+			return 0, errors.Wrap(err, "failed to set file owner")
+		}
 	}
 
 	return size, nil
