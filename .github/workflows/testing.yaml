@@ -1,0 +1,21 @@
+# mostly from https://github.com/marketplace/actions/build-and-push-docker-images
+name: Delete temporary PR image
+
+on:
+  workflow_dispatch:
+
+jobs:
+  docker:
+    runs-on: self-hosted
+
+    permissions:
+      packages: write
+
+    steps:
+      - name: Delete all images without tags
+        uses: Chizkiyahu/delete-untagged-ghcr-action@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          package_name: ftpsync
+          owner_type: user
+          untagged_only: true
