@@ -12,7 +12,7 @@ env:
 
 jobs:
   docker:
-    runs-on: self-hosted
+    runs-on: ubuntu-22.04
 
     # should match env.FS_TAG, in both pr-open.yaml and pr-close.yaml
     concurrency: pr-${{ github.event.pull_request.number }}

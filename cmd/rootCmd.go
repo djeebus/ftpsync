@@ -1,7 +1,11 @@
 package cmd
 
 import (
+	"context"
 	"net/url"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/djeebus/ftpsync/lib/config"
 	"github.com/djeebus/ftpsync/lib/deluge"
@@ -55,9 +59,7 @@ func doSync(config config.Config, log logrus.FieldLogger) error {
 		switch precheckURL.Scheme {
 		case "deluge", "deluges":
 			if precheck, err = deluge.New(log, precheckURL, config.RootDir); err != nil {
-				if err != nil {
-					return errors.Wrap(err, "failed to create deluge precheck")
-				}
+				return errors.Wrap(err, "failed to create deluge precheck")
 			}
 		}
 	}
@@ -70,5 +72,23 @@ func doSync(config config.Config, log logrus.FieldLogger) error {
 	}
 
 	processor := lib.BuildProcessor(source, database, precheck, destination, log)
+
+	if config.Repeat != 0 {
+		ctx := context.Background()
+		ctx, cancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+		defer cancel()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(config.Repeat):
+				if err = processor.Process(config.RootDir); err != nil {
+					log.WithError(err).Warning("failed to process")
+				}
+			}
+		}
+	}
+
 	return processor.Process(config.RootDir)
 }
