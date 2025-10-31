@@ -28,18 +28,19 @@ func New(url *url.URL) (lib.Source, error) {
 	fbs := new(source)
 	fbs.url = url
 
-	if err := fbs.Login(username, password); err != nil {
-		return nil, errors.Wrap(err, "failed to login")
-	}
-
-	return fbs, nil
+	return &source{
+		url:      url,
+		username: username,
+		password: password,
+	}, nil
 }
 
 type source struct {
 	url    *url.URL
 	client http.Client
 
-	authCookie string
+	username, password string
+	authCookie         string
 }
 
 func (f *source) toUrl(path string) string {
@@ -48,15 +49,15 @@ func (f *source) toUrl(path string) string {
 	return newURL.String()
 }
 
-func (f *source) Login(username, password string) error {
+func (f *source) login() error {
 	path := f.toUrl("/api/login")
 
 	requestBody := struct {
 		Password string `json:"password"`
 		Username string `json:"username"`
 	}{
-		Password: password,
-		Username: username,
+		Password: f.password,
+		Username: f.username,
 	}
 	body, err := json.Marshal(requestBody)
 	if err != nil {
@@ -90,6 +91,10 @@ func (f *source) Login(username, password string) error {
 }
 
 func (f *source) GetAllFiles(path string) (*lib.SizeSet, error) {
+	if err := f.login(); err != nil {
+		return nil, fmt.Errorf("failed to login: %w", err)
+	}
+
 	return lib.WalkLister(f, path)
 }
 

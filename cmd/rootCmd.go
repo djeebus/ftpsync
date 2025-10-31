@@ -73,6 +73,10 @@ func doSync(config config.Config, log logrus.FieldLogger) error {
 
 	processor := lib.BuildProcessor(source, database, precheck, destination, log)
 
+	if err := processor.Process(config.RootDir); err != nil {
+		return err
+	}
+
 	if config.Repeat != 0 {
 		ctx := context.Background()
 		ctx, cancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
@@ -90,5 +94,5 @@ func doSync(config config.Config, log logrus.FieldLogger) error {
 		}
 	}
 
-	return processor.Process(config.RootDir)
+	return nil
 }
