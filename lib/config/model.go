@@ -11,20 +11,20 @@ type UserID int
 type GroupID int
 
 type Config struct {
-	Database    string `env:"DATABASE,required"`
+	Database    string `env:"DATABASE,required" envDefault:"ftpsync.db"`
 	Source      string `env:"SOURCE,required"`
 	Precheck    string `env:"PRECHECK"`
 	Destination string `env:"DESTINATION,required"`
 
-	Repeat time.Duration `env:"REPEAT,required"`
+	Repeat time.Duration `env:"REPEAT"`
 
 	RootDir string `env:"ROOT_DIR,required"`
 
-	DirMode  os.FileMode `env:"DIR_MODE"`
-	FileMode os.FileMode `env:"FILE_MODE"`
+	DirMode  os.FileMode `env:"DIR_MODE" envDefault:"0777"`
+	FileMode os.FileMode `env:"FILE_MODE" envDefault:"0666"`
 
-	LogFormat string       `env:"LOG_FORMAT"`
-	LogLevel  logrus.Level `env:"LOG_LEVEL"`
+	LogFormat string       `env:"LOG_FORMAT" envDefault:"text"`
+	LogLevel  logrus.Level `env:"LOG_LEVEL" envDefault:"warning"`
 
 	DirUserID  UserID  `env:"DIR_USER_ID"`
 	DirGroupID GroupID `env:"DIR_GROUP_ID"`

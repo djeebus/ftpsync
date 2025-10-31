@@ -34,7 +34,7 @@ func getCurrentUser() *user.User {
 	return currentUser
 }
 
-func parseId(id string, lookupName lookupName) (int, error) {
+func parseId[T ~int](id string, lookupName lookupName) (T, error) {
 	var err error
 
 	if !allNumbers.MatchString(id) {
@@ -45,15 +45,20 @@ func parseId(id string, lookupName lookupName) (int, error) {
 		return 0, errors.Wrap(err, "failed to lookup id")
 	}
 
-	return strconv.Atoi(id)
+	num, err := strconv.Atoi(id)
+	if err != nil {
+		return 0, errors.Wrapf(err, "failed to parse %q", id)
+	}
+
+	return T(num), nil
 }
 
-func parseUser(userID string) (int, error) {
+func parseUser(userID string) (UserID, error) {
 	if userID == "" {
 		userID = getCurrentUser().Uid
 	}
 
-	return parseId(userID, func(name string) (string, error) {
+	return parseId[UserID](userID, func(name string) (string, error) {
 		if u, err := user.Lookup(name); err != nil {
 			return "", errors.Wrapf(err, "failed to lookup '%s' user", name)
 		} else {
@@ -62,12 +67,12 @@ func parseUser(userID string) (int, error) {
 	})
 }
 
-func parseGroup(groupId string) (int, error) {
+func parseGroup(groupId string) (GroupID, error) {
 	if groupId == "" {
 		groupId = getCurrentUser().Gid
 	}
 
-	return parseId(groupId, func(name string) (string, error) {
+	return parseId[GroupID](groupId, func(name string) (string, error) {
 		if g, err := user.LookupGroup(name); err != nil {
 			return "", errors.Wrapf(err, "failed to lookup '%s' group", name)
 		} else {
@@ -79,6 +84,7 @@ func parseGroup(groupId string) (int, error) {
 
 func ReadConfig() (Config, error) {
 	return env.ParseAsWithOptions[Config](env.Options{
+		Prefix: "FTPSYNC_",
 		FuncMap: map[reflect.Type]env.ParserFunc{
 			reflect.TypeOf(logrus.Level(0)): func(v string) (interface{}, error) {
 				return logrus.ParseLevel(v)
