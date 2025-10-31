@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -10,22 +11,24 @@ type UserID int
 type GroupID int
 
 type Config struct {
-	Database    string
-	Source      string
-	Precheck    string
-	Destination string
+	Database    string `env:"DATABASE,required"`
+	Source      string `env:"SOURCE,required"`
+	Precheck    string `env:"PRECHECK"`
+	Destination string `env:"DESTINATION,required"`
 
-	RootDir string `mapstructure:"root-dir"`
+	Repeat time.Duration `env:"REPEAT,required"`
 
-	DirMode  os.FileMode `mapstructure:"dir-mode"`
-	FileMode os.FileMode `mapstructure:"file-mode"`
+	RootDir string `env:"ROOT_DIR,required"`
 
-	LogFormat string       `mapstructure:"log-format"`
-	LogLevel  logrus.Level `mapstructure:"log-level"`
+	DirMode  os.FileMode `env:"DIR_MODE"`
+	FileMode os.FileMode `env:"FILE_MODE"`
 
-	DirUserID  UserID  `mapstructure:"dir-user-id"`
-	DirGroupID GroupID `mapstructure:"dir-group-id"`
+	LogFormat string       `env:"LOG_FORMAT"`
+	LogLevel  logrus.Level `env:"LOG_LEVEL"`
 
-	FileUserID  UserID  `mapstructure:"file-user-id"`
-	FileGroupID GroupID `mapstructure:"file-group-id"`
+	DirUserID  UserID  `env:"DIR_USER_ID"`
+	DirGroupID GroupID `env:"DIR_GROUP_ID"`
+
+	FileUserID  UserID  `env:"FILE_USER_ID"`
+	FileGroupID GroupID `env:"FILE_GROUP_ID"`
 }

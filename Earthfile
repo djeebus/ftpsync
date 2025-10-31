@@ -1,8 +1,8 @@
 VERSION 0.7
 
 build:
-    ARG GOLANG_VERSION="1.20.4"
-    ARG ALPINE_VERSION="3.17"
+    ARG GOLANG_VERSION="1.25.3"
+    ARG ALPINE_VERSION="3.22"
 
     FROM golang:${GOLANG_VERSION}-alpine${ALPINE_VERSION}
 
@@ -16,8 +16,8 @@ build:
     SAVE ARTIFACT ./ftpsync AS LOCAL ./dist/ftpsync
 
 tests:
-    ARG GOLANG_VERSION="1.20.4"
-    ARG ALPINE_VERSION="3.17"
+    ARG GOLANG_VERSION="1.25.3"
+    ARG ALPINE_VERSION="3.22"
 
     FROM golang:${GOLANG_VERSION}-alpine${ALPINE_VERSION}
 
@@ -30,7 +30,7 @@ tests:
     RUN go test ./...
 
 image:
-    ARG ALPINE_VERSION="3.17"
+    ARG ALPINE_VERSION="3.22"
     ARG image="ftpsync:dev"
 
     FROM alpine:${ALPINE_VERSION}
