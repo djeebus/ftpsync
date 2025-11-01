@@ -1,5 +1,5 @@
 # mostly from https://github.com/marketplace/actions/build-and-push-docker-images
-name: Build and push temporary image
+name: Tests
 
 on:
   pull_request:

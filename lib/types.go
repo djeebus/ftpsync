@@ -5,10 +5,12 @@ import "io"
 type Source interface {
 	Read(path string) (io.ReadCloser, error)
 	GetAllFiles(path string) (*SizeSet, error)
+	Close() error
 }
 
 type Precheck interface {
 	IsFileReady(path string) (bool, error)
+	Close() error
 }
 
 type Destination interface {
@@ -24,4 +26,5 @@ type Database interface {
 	Exists(path string) (bool, error)
 	Record(path string) error
 	Delete(path string) error
+	Close() error
 }

@@ -103,4 +103,8 @@ func (d *Deluge) IsFileReady(path string) (bool, error) {
 	return isReady, nil
 }
 
+func (d *Deluge) Close() error {
+	return nil
+}
+
 var _ lib.Precheck = new(Deluge)
