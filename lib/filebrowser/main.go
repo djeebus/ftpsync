@@ -43,6 +43,8 @@ type source struct {
 	authCookie         string
 }
 
+var _ lib.Source = new(source)
+
 func (f *source) toUrl(path string) string {
 	path = strings.TrimLeft(path, "/")
 	newURL := f.url.JoinPath(path)
@@ -183,4 +185,7 @@ func (f *source) Read(path string) (io.ReadCloser, error) {
 	return response.Body, nil
 }
 
-var _ lib.Source = new(source)
+func (f *source) Close() error {
+	f.client.CloseIdleConnections()
+	return nil
+}

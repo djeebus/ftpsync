@@ -152,6 +152,12 @@ func downloadFile(_ FileStatusKey, p *Processor, path string) error {
 	if err != nil {
 		return errors.Wrapf(err, "failed to write %s", path)
 	}
+	defer func() {
+		if err := fp.Close(); err != nil {
+			fmt.Printf("failed to close reader for %s: %v", path, err)
+		}
+	}()
+
 	done := time.Since(start)
 	log.WithFields(logrus.Fields{
 		"bytes_str": fmtSize(bytes),

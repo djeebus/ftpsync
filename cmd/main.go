@@ -1,7 +1,11 @@
 package cmd
 
 import (
+	"context"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/djeebus/ftpsync/lib/config"
 	"github.com/pkg/errors"
@@ -9,6 +13,10 @@ import (
 )
 
 func RootCmd() error {
+	ctx := context.Background()
+	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
 	cfg, err := config.ReadConfig()
 	if err != nil {
 		return errors.Wrap(err, "failed to get config")
@@ -27,10 +35,22 @@ func RootCmd() error {
 		log.SetFormatter(&logrus.JSONFormatter{})
 	}
 
-	if err = doSync(cfg, log); err != nil {
-		log.WithError(err).Fatal("sync failed")
+	if cfg.Repeat != 0 {
+		if err = doSync(cfg, log); err != nil {
+			log.WithError(err).Warning("failed to process")
+		}
+
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(cfg.Repeat):
+				if err = doSync(cfg, log); err != nil {
+					log.WithError(err).Warning("failed to process")
+				}
+			}
+		}
 	}
 
-	return nil
-
+	return doSync(cfg, log)
 }

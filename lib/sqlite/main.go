@@ -17,6 +17,12 @@ CREATE TABLE IF NOT EXISTS files (
 )
 `
 
+type database struct {
+	db *sql.DB
+}
+
+var _ lib.Database = new(database)
+
 func New(dbPath string) (lib.Database, error) {
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
@@ -28,10 +34,6 @@ func New(dbPath string) (lib.Database, error) {
 	}
 
 	return &database{db}, nil
-}
-
-type database struct {
-	db *sql.DB
 }
 
 func (s *database) GetAllFiles(rootPath string) (*lib.Set, error) {
@@ -92,4 +94,6 @@ func (s *database) Delete(path string) error {
 	return nil
 }
 
-var _ lib.Database = new(database)
+func (s *database) Close() error {
+	return s.db.Close()
+}

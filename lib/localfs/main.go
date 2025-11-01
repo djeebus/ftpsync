@@ -1,7 +1,6 @@
 package localfs
 
 import (
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -108,12 +107,6 @@ func (l *destination) Delete(path string) error {
 }
 
 func (l *destination) Write(path string, fp io.ReadCloser) (int64, error) {
-	defer func() {
-		if err := fp.Close(); err != nil {
-			fmt.Printf("failed to close reader for %s: %v", path, err)
-		}
-	}()
-
 	var err error
 	path = l.toLocalPath(path)
 	dirname := filepath.Dir(path)

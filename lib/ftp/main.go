@@ -96,4 +96,8 @@ func (f *source) Read(path string) (io.ReadCloser, error) {
 	return e, nil
 }
 
+func (f *source) Close() error {
+	return f.conn.Quit()
+}
+
 var _ lib.Source = new(source)
