@@ -8,7 +8,7 @@ on:
 
 env:
   FS_IMAGE: ghcr.io/${{ github.repository }}
-  FS_TAG: main
+  FS_TAG: latest
 
 jobs:
   docker:
