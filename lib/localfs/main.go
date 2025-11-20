@@ -9,12 +9,14 @@ import (
 
 	"github.com/djeebus/ftpsync/lib/config"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 
 	"github.com/djeebus/ftpsync/lib"
 )
 
-func New(config config.Config) (lib.Destination, error) {
-	return &destination{
+func New(config config.Config, logger logrus.FieldLogger) (*LocalFS, error) {
+	return &LocalFS{
+		logger:      logger,
 		root:        config.Destination,
 		dirMode:     config.DirMode,
 		dirGroupID:  config.DirGroupID,
@@ -25,7 +27,9 @@ func New(config config.Config) (lib.Destination, error) {
 	}, nil
 }
 
-type destination struct {
+var _ lib.Destination = new(LocalFS)
+
+type LocalFS struct {
 	dirMode  fs.FileMode
 	fileMode fs.FileMode
 
@@ -35,17 +39,18 @@ type destination struct {
 	dirUserID  config.UserID
 	dirGroupID config.GroupID
 
-	root string
+	logger logrus.FieldLogger
+	root   string
 }
 
-func (l *destination) getFsys() fs.FS {
+func (l *LocalFS) getFsys() fs.FS {
 	// so much trimming required to get FS to work
 	root := strings.TrimRight(l.root, "/")
 	fsys := os.DirFS(root)
 	return fsys
 }
 
-func (l *destination) GetAllFiles(rootPath string) (*lib.SizeSet, error) {
+func (l *LocalFS) GetAllFiles(rootPath string) (*lib.SizeSet, error) {
 	fsys := l.getFsys()
 
 	rootPath = strings.TrimLeft(rootPath, "/")
@@ -79,13 +84,13 @@ func (l *destination) GetAllFiles(rootPath string) (*lib.SizeSet, error) {
 	return files, nil
 }
 
-func (l *destination) toLocalPath(path string) string {
+func (l *LocalFS) toLocalPath(path string) string {
 	path = strings.TrimLeft(path, "/")
 	path = filepath.Join(l.root, path)
 	return path
 }
 
-func (l *destination) Exists(path string) (bool, error) {
+func (l *LocalFS) Exists(path string) (bool, error) {
 	path = l.toLocalPath(path)
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -97,7 +102,7 @@ func (l *destination) Exists(path string) (bool, error) {
 	}
 }
 
-func (l *destination) Delete(path string) error {
+func (l *LocalFS) Delete(path string) error {
 	path = l.toLocalPath(path)
 	if err := os.Remove(path); err != nil {
 		return errors.Wrap(err, "failed to delete file")
@@ -106,7 +111,7 @@ func (l *destination) Delete(path string) error {
 	return nil
 }
 
-func (l *destination) Write(path string, fp io.ReadCloser) (int64, error) {
+func (l *LocalFS) Write(path string, fp io.ReadCloser) (int64, error) {
 	var err error
 	path = l.toLocalPath(path)
 	dirname := filepath.Dir(path)
@@ -127,8 +132,11 @@ func (l *destination) Write(path string, fp io.ReadCloser) (int64, error) {
 
 	size, err := io.Copy(temppath, fp)
 	if err != nil {
+		l.safelyClose(temppath)
+		l.safelyRemove(temppath.Name())
 		return 0, errors.Wrap(err, "failed to write file to disk")
 	}
+
 	if err = temppath.Close(); err != nil {
 		return 0, errors.Wrap(err, "failed to close temp file")
 	}
@@ -150,7 +158,7 @@ func (l *destination) Write(path string, fp io.ReadCloser) (int64, error) {
 	return size, nil
 }
 
-func (l *destination) cleanDirectories(path string) (isDeleted bool, err error) {
+func (l *LocalFS) cleanDirectories(path string) (isDeleted bool, err error) {
 	var (
 		hasChildren bool
 		wasDeleted  bool
@@ -191,7 +199,7 @@ func (l *destination) cleanDirectories(path string) (isDeleted bool, err error) 
 	return true, nil
 }
 
-func (l *destination) CleanDirectories(path string) error {
+func (l *LocalFS) CleanDirectories(path string) error {
 	path = l.toLocalPath(path)
 
 	_, err := l.cleanDirectories(path)
@@ -199,4 +207,20 @@ func (l *destination) CleanDirectories(path string) error {
 	return err
 }
 
-var _ lib.Destination = new(destination)
+func (l *LocalFS) safelyClose(temppath *os.File) {
+	if err := temppath.Close(); err != nil {
+		l.logger.
+			WithField("path", temppath.Name()).
+			WithError(err).
+			Error("failed to close temp file")
+	}
+}
+
+func (l *LocalFS) safelyRemove(path string) {
+	if err := os.Remove(path); err != nil {
+		l.logger.
+			WithField("path", path).
+			WithError(err).
+			Error("failed to remove file")
+	}
+}

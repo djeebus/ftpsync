@@ -7,7 +7,7 @@ import (
 )
 
 func TestIgnoreNoSuchFile(t *testing.T) {
-	var d destination
+	var d LocalFS
 
 	_, err := d.cleanDirectories("/a/b/c/d")
 	require.NoError(t, err)

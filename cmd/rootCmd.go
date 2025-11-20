@@ -65,7 +65,7 @@ func doSync(config config.Config, log logrus.FieldLogger) error {
 	if database, err = sqlite.New(config.Database); err != nil {
 		return errors.Wrap(err, "failed to build database")
 	}
-	if destination, err = localfs.New(config); err != nil {
+	if destination, err = localfs.New(config, log); err != nil {
 		return errors.Wrap(err, "failed to build destination")
 	}
 
