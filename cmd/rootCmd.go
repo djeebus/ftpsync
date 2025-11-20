@@ -44,7 +44,7 @@ func doSync(config config.Config, log logrus.FieldLogger) error {
 			return errors.Wrap(err, "failed to build ftp source")
 		}
 	case "filebrowser":
-		if source, err = filebrowser.New(srcURL); err != nil {
+		if source, err = filebrowser.New(srcURL, log); err != nil {
 			return errors.Wrap(err, "failed to build filebrowser source")
 		}
 	default:

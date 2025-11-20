@@ -127,7 +127,7 @@ func (l *destination) Write(path string, fp io.ReadCloser) (int64, error) {
 
 	size, err := io.Copy(temppath, fp)
 	if err != nil {
-		return 0, errors.Wrapf(err, "failed to write %s", path)
+		return 0, errors.Wrap(err, "failed to write file to disk")
 	}
 	if err = temppath.Close(); err != nil {
 		return 0, errors.Wrap(err, "failed to close temp file")
@@ -158,6 +158,10 @@ func (l *destination) cleanDirectories(path string) (isDeleted bool, err error) 
 
 	entries, err := os.ReadDir(path)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+
 		return false, errors.Wrapf(err, "failed to read %s", path)
 	}
 
