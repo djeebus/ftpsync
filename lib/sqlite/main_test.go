@@ -30,6 +30,7 @@ func TestHappyPath(t *testing.T) {
 	require.NoError(t, err)
 
 	err = db.Record(path2)
+	require.NoError(t, err)
 
 	ok, err := db.Exists(path1)
 	require.NoError(t, err)
