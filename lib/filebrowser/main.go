@@ -156,7 +156,7 @@ func (f *FileBrowser) List(path string) (lib.ListResult, error) {
 	}
 
 	for _, entry := range responseStruct.Items {
-		if f.includeEntry(entry) {
+		if !f.includeEntry(entry) {
 			continue
 		}
 

@@ -1,11 +1,39 @@
 package filebrowser
 
 import (
+	"net/url"
+	"os"
 	"testing"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func getRequiredEnvVar(t *testing.T, key string) string {
+	text := os.Getenv(key)
+	if text == "" {
+		t.Skipf("must pass %s", key)
+	}
+	return text
+}
+
+func TestFileBrowser(t *testing.T) {
+	urlText := getRequiredEnvVar(t, "FILEBROWSER_URL")
+	rootDir := getRequiredEnvVar(t, "FILEBROWSER_ROOT")
+
+	url, err := url.Parse(urlText)
+	require.NoError(t, err)
+
+	logger := logrus.New()
+
+	f, err := New(url, logger)
+	require.NoError(t, err)
+
+	files, err := f.GetAllFiles(rootDir)
+	require.NoError(t, err)
+	assert.Len(t, files, 1)
+}
 
 func TestFileBrowser_includeEntry(t *testing.T) {
 	testCases := map[string]struct {
