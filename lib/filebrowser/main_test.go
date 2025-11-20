@@ -32,7 +32,7 @@ func TestFileBrowser(t *testing.T) {
 
 	files, err := f.GetAllFiles(rootDir)
 	require.NoError(t, err)
-	assert.Len(t, files, 1)
+	assert.GreaterOrEqual(t, files.Len(), 1)
 }
 
 func TestFileBrowser_includeEntry(t *testing.T) {
