@@ -3,6 +3,7 @@ package filebrowser
 import (
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -19,7 +20,7 @@ func TestFileBrowser_includeEntry(t *testing.T) {
 			shouldInclude: false,
 		},
 
-		"directory matches glob": {
+		"file matches glob": {
 			excludedGlobs: []string{"*something*"},
 			input: responseItem{
 				IsDir: true,
@@ -27,27 +28,24 @@ func TestFileBrowser_includeEntry(t *testing.T) {
 			},
 			shouldInclude: true,
 		},
-		"directory does not match glob": {
+		"file does not match glob": {
 			excludedGlobs: []string{"*g*"},
 			input: responseItem{
-				IsDir: true,
-				Path:  "abc/def",
+				Path: "abc/def",
 			},
 			shouldInclude: true,
 		},
-		"directory subpath matches exact": {
+		"file subpath matches exact": {
 			excludedGlobs: []string{"*/b/*"},
 			input: responseItem{
-				IsDir: true,
-				Path:  "a/b/c",
+				Path: "a/b/c",
 			},
 			shouldInclude: false,
 		},
-		"directory subpath matches partial": {
+		"file subpath matches partial": {
 			excludedGlobs: []string{"*b*"},
 			input: responseItem{
-				IsDir: true,
-				Path:  "a/b/c",
+				Path: "a/b/c",
 			},
 			shouldInclude: true,
 		},
@@ -83,7 +81,10 @@ func TestFileBrowser_includeEntry(t *testing.T) {
 
 	for name, testCase := range testCases {
 		t.Run(name, func(t *testing.T) {
-			s := &FileBrowser{excludedPatterns: testCase.excludedGlobs}
+			s := &FileBrowser{
+				excludedPatterns: testCase.excludedGlobs,
+				logger:           logrus.New(),
+			}
 			actual := s.includeEntry(testCase.input)
 			assert.Equal(t, testCase.shouldInclude, actual)
 		})
