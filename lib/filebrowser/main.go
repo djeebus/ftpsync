@@ -16,9 +16,17 @@ import (
 )
 
 func New(url *url.URL) (lib.Source, error) {
+	var src source
+
 	// pull data off url
-	username := url.User.Username()
-	password, _ := url.User.Password()
+	src.url = url
+	src.username = url.User.Username()
+	src.password, _ = url.User.Password()
+
+	query := url.Query()
+	if paths, ok := query["excluded"]; ok {
+		src.excludedPatterns = paths
+	}
 
 	// clean url
 	url.Scheme = "https"
@@ -28,17 +36,14 @@ func New(url *url.URL) (lib.Source, error) {
 	fbs := new(source)
 	fbs.url = url
 
-	return &source{
-		url:      url,
-		username: username,
-		password: password,
-	}, nil
+	return &src, nil
 }
 
 type source struct {
 	url    *url.URL
 	client http.Client
 
+	excludedPatterns   []string
 	username, password string
 	authCookie         string
 }
@@ -100,6 +105,22 @@ func (f *source) GetAllFiles(path string) (*lib.SizeSet, error) {
 	return lib.WalkLister(f, path)
 }
 
+type responseItem struct {
+	IsDir     bool   `json:"isDir"`
+	IsSymlink bool   `json:"isSymlink"`
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	Size      int64  `json:"size"`
+}
+
+type responseType struct {
+	IsDir     bool           `json:"isDir"`
+	IsSymlink bool           `json:"isSymlink"`
+	Items     []responseItem `json:"items"`
+	Name      string         `json:"name"`
+	Path      string         `json:"path"`
+}
+
 func (f *source) List(path string) (lib.ListResult, error) {
 	result := lib.NewListResult()
 
@@ -128,24 +149,16 @@ func (f *source) List(path string) (lib.ListResult, error) {
 	if err != nil {
 		return result, errors.Wrap(err, "failed to read body")
 	}
-	var responseStruct struct {
-		IsDir     bool `json:"isDir"`
-		IsSymlink bool `json:"isSymlink"`
-		Items     []struct {
-			IsDir     bool   `json:"isDir"`
-			IsSymlink bool   `json:"isSymlink"`
-			Name      string `json:"name"`
-			Path      string `json:"path"`
-			Size      int64  `json:"size"`
-		} `json:"items"`
-		Name string `json:"name"`
-		Path string `json:"path"`
-	}
+	var responseStruct responseType
 	if err = json.Unmarshal(responseBody, &responseStruct); err != nil {
 		return result, errors.Wrap(err, "failed to unmarshal body")
 	}
 
 	for _, entry := range responseStruct.Items {
+		if f.includeEntry(entry) {
+			continue
+		}
+
 		if entry.IsDir {
 			result.Folders = append(result.Folders, entry.Name)
 		} else if entry.IsSymlink {
@@ -188,4 +201,18 @@ func (f *source) Read(path string) (io.ReadCloser, error) {
 func (f *source) Close() error {
 	f.client.CloseIdleConnections()
 	return nil
+}
+
+func (f *source) includeEntry(entry responseItem) bool {
+	if entry.IsSymlink {
+		return false
+	}
+
+	for _, pattern := range f.excludedPatterns {
+		if ok, _ := filepath.Match(pattern, entry.Path); ok {
+			return false
+		}
+	}
+
+	return true
 }
