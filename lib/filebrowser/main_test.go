@@ -83,7 +83,7 @@ func TestFileBrowser_includeEntry(t *testing.T) {
 
 	for name, testCase := range testCases {
 		t.Run(name, func(t *testing.T) {
-			s := &source{excludedPatterns: testCase.excludedGlobs}
+			s := &FileBrowser{excludedPatterns: testCase.excludedGlobs}
 			actual := s.includeEntry(testCase.input)
 			assert.Equal(t, testCase.shouldInclude, actual)
 		})
