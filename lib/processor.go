@@ -111,7 +111,12 @@ func (p *Processor) Process(rootPath string) error {
 		}
 
 		if err = action.Action(key, p, file); err != nil {
-			return errors.Wrapf(err, "failed to perform action for %s", file)
+			log.
+				WithField("action", action.Name).
+				WithField("state", key.String()).
+				WithError(err).
+				Error("action failed")
+			continue
 		}
 	}
 
