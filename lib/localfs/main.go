@@ -158,6 +158,10 @@ func (l *destination) cleanDirectories(path string) (isDeleted bool, err error) 
 
 	entries, err := os.ReadDir(path)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+
 		return false, errors.Wrapf(err, "failed to read %s", path)
 	}
 
