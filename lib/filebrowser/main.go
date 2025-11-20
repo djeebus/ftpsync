@@ -209,9 +209,14 @@ func (f *FileBrowser) includeEntry(entry responseItem) bool {
 		return false
 	}
 
+	if entry.IsDir {
+		return true
+	}
+
 	for _, pattern := range f.excludedPatterns {
 		if ok, _ := filepath.Match(pattern, entry.Path); ok {
 			f.logger.
+				WithField("name", entry.Name).
 				WithField("pattern", pattern).
 				WithField("path", entry.Path).
 				Debug("matches exclusion pattern")
