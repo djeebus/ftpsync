@@ -155,7 +155,7 @@ func downloadFile(_ FileStatusKey, p *Processor, path string) error {
 	start := time.Now()
 	bytes, err := p.local.Write(path, fp)
 	if err != nil {
-		return errors.Wrapf(err, "failed to write %s", path)
+		return fmt.Errorf("failed to write %s (wrote %d bytes): %w", path, bytes, err)
 	}
 	defer func() {
 		if err := fp.Close(); err != nil {

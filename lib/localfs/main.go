@@ -1,6 +1,7 @@
 package localfs
 
 import (
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -134,7 +135,7 @@ func (l *LocalFS) Write(path string, fp io.ReadCloser) (int64, error) {
 	if err != nil {
 		l.safelyClose(temppath)
 		l.safelyRemove(temppath.Name())
-		return 0, errors.Wrap(err, "failed to write file to disk")
+		return size, fmt.Errorf("failed to write file to disk (wrote %d bytes): %w", size, err)
 	}
 
 	if err = temppath.Close(); err != nil {

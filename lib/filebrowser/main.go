@@ -129,16 +129,9 @@ func (f *FileBrowser) List(path string) (lib.ListResult, error) {
 	apiPath = filepath.Join("/api/resources", apiPath)
 	apiPath = f.toUrl(apiPath)
 
-	request, err := http.NewRequest("GET", apiPath, nil)
+	response, err := f.request("GET", apiPath)
 	if err != nil {
-		return result, errors.Wrap(err, "failed to make request")
-	}
-	request.Header.Add("Cookie", fmt.Sprintf("auth=%s", f.authCookie))
-	request.Header.Add("X-Auth", f.authCookie)
-
-	response, err := f.client.Do(request)
-	if err != nil {
-		return result, errors.Wrap(err, "failed to get response")
+		return result, err
 	}
 	defer response.Body.Close()
 
@@ -172,14 +165,8 @@ func (f *FileBrowser) List(path string) (lib.ListResult, error) {
 
 }
 
-func (f *FileBrowser) Read(path string) (io.ReadCloser, error) {
-	// https://sky.seedhost.eu/jioewjafioewaj/filebrowser/api/raw/downloads/.htaccess?auth=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoxLCJsb2NhbGUiOiJlbiIsInZpZXdNb2RlIjoibGlzdCIsInNpbmdsZUNsaWNrIjpmYWxzZSwicGVybSI6eyJhZG1pbiI6dHJ1ZSwiZXhlY3V0ZSI6dHJ1ZSwiY3JlYXRlIjp0cnVlLCJyZW5hbWUiOnRydWUsIm1vZGlmeSI6dHJ1ZSwiZGVsZXRlIjp0cnVlLCJzaGFyZSI6dHJ1ZSwiZG93bmxvYWQiOnRydWV9LCJjb21tYW5kcyI6W10sImxvY2tQYXNzd29yZCI6ZmFsc2UsImhpZGVEb3RmaWxlcyI6ZmFsc2UsImRhdGVGb3JtYXQiOmZhbHNlfSwiaXNzIjoiRmlsZSBCcm93c2VyIiwiZXhwIjoxNjg1NTQ2MzI2LCJpYXQiOjE2ODU1MzkxMjZ9.pNBHHV-EhUVF7VebdP3VRDk8nWK4fZHxUbnbsInq3rY&
-	apiPath := strings.TrimLeft(path, "/")
-	apiPath = filepath.Join("/api/raw", apiPath)
-	apiPath = f.toUrl(apiPath)
-	apiPath += "?auth=" + f.authCookie
-
-	request, err := http.NewRequest("GET", apiPath, nil)
+func (f *FileBrowser) request(method, apiPath string) (*http.Response, error) {
+	request, err := http.NewRequest(method, apiPath, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to make request")
 	}
@@ -189,6 +176,20 @@ func (f *FileBrowser) Read(path string) (io.ReadCloser, error) {
 	response, err := f.client.Do(request)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get response")
+	}
+	return response, nil
+}
+
+func (f *FileBrowser) Read(path string) (io.ReadCloser, error) {
+	// https://sky.seedhost.eu/jioewjafioewaj/filebrowser/api/raw/downloads/.htaccess?auth=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoxLCJsb2NhbGUiOiJlbiIsInZpZXdNb2RlIjoibGlzdCIsInNpbmdsZUNsaWNrIjpmYWxzZSwicGVybSI6eyJhZG1pbiI6dHJ1ZSwiZXhlY3V0ZSI6dHJ1ZSwiY3JlYXRlIjp0cnVlLCJyZW5hbWUiOnRydWUsIm1vZGlmeSI6dHJ1ZSwiZGVsZXRlIjp0cnVlLCJzaGFyZSI6dHJ1ZSwiZG93bmxvYWQiOnRydWV9LCJjb21tYW5kcyI6W10sImxvY2tQYXNzd29yZCI6ZmFsc2UsImhpZGVEb3RmaWxlcyI6ZmFsc2UsImRhdGVGb3JtYXQiOmZhbHNlfSwiaXNzIjoiRmlsZSBCcm93c2VyIiwiZXhwIjoxNjg1NTQ2MzI2LCJpYXQiOjE2ODU1MzkxMjZ9.pNBHHV-EhUVF7VebdP3VRDk8nWK4fZHxUbnbsInq3rY&
+	apiPath := strings.TrimLeft(path, "/")
+	apiPath = filepath.Join("/api/raw", apiPath)
+	apiPath = f.toUrl(apiPath)
+	apiPath += "?auth=" + f.authCookie
+
+	response, err := f.request("GET", apiPath)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to make request")
 	}
 
 	if response.StatusCode >= 400 {
