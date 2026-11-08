@@ -12,13 +12,13 @@ import (
 	"golift.io/deluge"
 )
 
-func New(log logrus.FieldLogger, url *url.URL, rootDir string) (*Deluge, error) {
-	client, err := createClient(url)
+func New(ctx context.Context, log logrus.FieldLogger, url *url.URL, rootDir string) (*Deluge, error) {
+	client, err := createClient(ctx, url)
 	if err != nil {
 		return nil, err
 	}
 
-	fileStatuses, err := getXfers(log, client)
+	fileStatuses, err := getXfers(ctx, log, client)
 	if err != nil {
 		return nil, err
 	}
@@ -26,20 +26,26 @@ func New(log logrus.FieldLogger, url *url.URL, rootDir string) (*Deluge, error) 
 	return &Deluge{client, fileStatuses, log, rootDir}, nil
 }
 
-func getXfers(log logrus.FieldLogger, client *deluge.Deluge) (map[string]bool, error) {
+func getXfers(ctx context.Context, log logrus.FieldLogger, client *deluge.Deluge) (map[string]bool, error) {
 	var err error
 
-	if err = client.Login(); err != nil {
+	if err = client.LoginContext(ctx); err != nil {
 		return nil, errors.Wrap(err, "failed to log in")
 	}
 
-	transfers, err := client.GetXfers()
+	transfers, err := client.GetXfersContext(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to list transfers")
 	}
 
 	fileStatuses := make(map[string]bool)
 	for _, xfer := range transfers {
+		if len(xfer.FileProgress) < len(xfer.Files) {
+			// progress isn't known yet, e.g. while fetching metadata, so nothing is ready
+			log.WithField("name", xfer.Name).Debug("deluge transfer is missing file progress")
+			continue
+		}
+
 		for idx := range xfer.Files {
 			file := xfer.Files[idx]
 			progress := xfer.FileProgress[idx]
@@ -56,7 +62,7 @@ func getXfers(log logrus.FieldLogger, client *deluge.Deluge) (map[string]bool, e
 	return fileStatuses, nil
 }
 
-func createClient(url *url.URL) (*deluge.Deluge, error) {
+func createClient(ctx context.Context, url *url.URL) (*deluge.Deluge, error) {
 	switch url.Scheme {
 	case "deluge":
 		url.Scheme = "http"
@@ -72,7 +78,7 @@ func createClient(url *url.URL) (*deluge.Deluge, error) {
 		Password: pass,
 	}
 
-	client, err := deluge.New(context.TODO(), &config)
+	client, err := deluge.New(ctx, &config)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create client")
 	}

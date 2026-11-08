@@ -61,3 +61,24 @@ func TestHappyPath(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, emptySet, files)
 }
+
+func TestGetAllFilesMatchesWholeDirectories(t *testing.T) {
+	db, err := New(":memory:")
+	require.NoError(t, err)
+
+	for _, path := range []string{"/d/file", "/data/file", "/D/file", "/a_b/file", "/axb/file"} {
+		require.NoError(t, db.Record(path))
+	}
+
+	files, err := db.GetAllFiles("/d")
+	require.NoError(t, err)
+	require.Equal(t, []string{"/d/file"}, files.ToList())
+
+	files, err = db.GetAllFiles("/a_b/")
+	require.NoError(t, err)
+	require.Equal(t, []string{"/a_b/file"}, files.ToList())
+
+	files, err = db.GetAllFiles("/")
+	require.NoError(t, err)
+	require.Equal(t, 5, files.Len())
+}

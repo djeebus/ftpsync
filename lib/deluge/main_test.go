@@ -1,6 +1,7 @@
 package deluge
 
 import (
+	"context"
 	"net/url"
 	"os"
 	"testing"
@@ -26,7 +27,7 @@ func TestCreation(t *testing.T) {
 	delugeUrl, err := url.Parse(delugeUrlText)
 	require.NoError(t, err)
 
-	precheck, err := New(logrus.New(), delugeUrl, "/testing/")
+	precheck, err := New(context.Background(), logrus.New(), delugeUrl, "/testing/")
 	require.NoError(t, err)
 
 	isGood, err := precheck.IsFileReady(xferPath)

@@ -1,7 +1,7 @@
 # cuts a release from conventional commits (https://www.conventionalcommits.org) on every push to main:
 #   fix: ...                       -> patch
 #   feat: ...                      -> minor
-#   feat!: ... / BREAKING CHANGE:  -> major (minor while still on v0.x)
+#   feat!: ... / BREAKING CHANGE:  -> major
 # commits that don't follow the convention are ignored; if nothing qualifies, no release is made.
 name: Auto release
 
@@ -30,8 +30,6 @@ jobs:
         uses: go-semantic-release/action@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          # stay on v0.x until we explicitly decide to cut v1.0.0
-          allow-initial-development-versions: true
 
       # releases created with GITHUB_TOKEN don't trigger other workflows, so build the image here
       - if: steps.semrel.outputs.version != ''

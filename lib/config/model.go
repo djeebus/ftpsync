@@ -12,9 +12,9 @@ type GroupID int
 
 type Config struct {
 	Database    string `env:"DATABASE,required" envDefault:"ftpsync.db"`
-	Source      string `env:"SOURCE,required"`
+	Source      string `env:"SOURCE,required,notEmpty"`
 	Precheck    string `env:"PRECHECK"`
-	Destination string `env:"DESTINATION,required"`
+	Destination string `env:"DESTINATION,required,notEmpty"`
 
 	Repeat time.Duration `env:"REPEAT"`
 
