@@ -24,10 +24,10 @@ type Destination interface {
 	DeletePartial(path string) error
 	// PartialSize returns how many bytes of an interrupted download of path are on disk.
 	PartialSize(path string) (int64, error)
-	// Write appends fp to the partial download of path, starting at offset, and
+	// WriteAt appends fp to the partial download of path, starting at offset, and
 	// moves it into place once fp is exhausted. It returns the total file size.
 	// On failure the partial download is kept so it can be resumed.
-	Write(path string, fp io.Reader, offset int64) (int64, error)
+	WriteAt(path string, fp io.Reader, offset int64) (int64, error)
 	CleanDirectories(path string) error
 }
 

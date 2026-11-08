@@ -40,7 +40,7 @@ func TestWriteResume(t *testing.T) {
 	require.NoError(t, err)
 
 	// first attempt dies partway through
-	size, err := d.Write("/a/file.txt", &failingReader{data: []byte("hello ")}, 0)
+	size, err := d.WriteAt("/a/file.txt", &failingReader{data: []byte("hello ")}, 0)
 	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 	assert.Equal(t, int64(6), size)
 
@@ -55,7 +55,7 @@ func TestWriteResume(t *testing.T) {
 	assert.Equal(t, 0, files.Len())
 
 	// resume from where it left off
-	size, err = d.Write("/a/file.txt", strings.NewReader("world"), partial)
+	size, err = d.WriteAt("/a/file.txt", strings.NewReader("world"), partial)
 	require.NoError(t, err)
 	assert.Equal(t, int64(11), size)
 
@@ -73,10 +73,10 @@ func TestWriteRestartTruncates(t *testing.T) {
 	d, err := New(config.Config{Destination: root, DirMode: 0o755, FileMode: 0o644}, logrus.New())
 	require.NoError(t, err)
 
-	_, err = d.Write("/file.txt", &failingReader{data: []byte("stale data")}, 0)
+	_, err = d.WriteAt("/file.txt", &failingReader{data: []byte("stale data")}, 0)
 	require.Error(t, err)
 
-	_, err = d.Write("/file.txt", strings.NewReader("new"), 0)
+	_, err = d.WriteAt("/file.txt", strings.NewReader("new"), 0)
 	require.NoError(t, err)
 
 	data, err := os.ReadFile(filepath.Join(root, "file.txt"))
@@ -89,7 +89,7 @@ func TestGetAllPartials(t *testing.T) {
 	d, err := New(config.Config{Destination: root, DirMode: 0o755, FileMode: 0o644}, logrus.New())
 	require.NoError(t, err)
 
-	_, err = d.Write("/a/b/file.txt", &failingReader{data: []byte("partial")}, 0)
+	_, err = d.WriteAt("/a/b/file.txt", &failingReader{data: []byte("partial")}, 0)
 	require.Error(t, err)
 
 	partials, err := d.GetAllPartials("/a")

@@ -205,7 +205,7 @@ func downloadFile(_ FileStatusKey, p *Processor, path string) error {
 	}()
 
 	start := time.Now()
-	size, err := p.local.Write(path, fp, offset)
+	size, err := p.local.WriteAt(path, fp, offset)
 	bytes := size - offset
 	if err != nil {
 		return fmt.Errorf("failed to write %s (wrote %d bytes, %d total): %w", path, bytes, size, err)

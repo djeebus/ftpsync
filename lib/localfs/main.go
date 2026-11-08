@@ -171,7 +171,7 @@ func (l *LocalFS) PartialSize(path string) (int64, error) {
 	return info.Size(), nil
 }
 
-func (l *LocalFS) Write(path string, fp io.Reader, offset int64) (int64, error) {
+func (l *LocalFS) WriteAt(path string, fp io.Reader, offset int64) (int64, error) {
 	var err error
 	path = l.toLocalPath(path)
 	dirname := filepath.Dir(path)
