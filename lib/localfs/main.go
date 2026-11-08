@@ -52,22 +52,9 @@ func (l *LocalFS) getFsys() fs.FS {
 }
 
 func (l *LocalFS) GetAllFiles(rootPath string) (*lib.SizeSet, error) {
-	fsys := l.getFsys()
-
-	rootPath = strings.TrimLeft(rootPath, "/")
-	rootPath = strings.TrimRight(rootPath, "/")
-
 	files := lib.NewSizeSet()
-	if err := fs.WalkDir(fsys, rootPath, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			if os.IsNotExist(err) {
-				return nil
-			}
-
-			return errors.Wrapf(err, "error at %s", path)
-		}
-
-		if d.IsDir() || strings.HasPrefix(d.Name(), partialPrefix) {
+	if err := l.walkFiles(rootPath, func(path string, d fs.DirEntry) error {
+		if strings.HasPrefix(d.Name(), partialPrefix) {
 			return nil
 		}
 
@@ -79,10 +66,55 @@ func (l *LocalFS) GetAllFiles(rootPath string) (*lib.SizeSet, error) {
 		files.Set("/"+path, info.Size())
 		return nil
 	}); err != nil {
-		return nil, errors.Wrapf(err, "failed to walk [%s, %s]", l.root, rootPath)
+		return nil, err
 	}
 
 	return files, nil
+}
+
+// GetAllPartials returns the paths of the files that have partial downloads
+func (l *LocalFS) GetAllPartials(rootPath string) (*lib.Set, error) {
+	partials := lib.NewSet()
+	if err := l.walkFiles(rootPath, func(path string, d fs.DirEntry) error {
+		name, ok := strings.CutPrefix(d.Name(), partialPrefix)
+		if !ok {
+			return nil
+		}
+
+		partials.Set("/" + filepath.Join(filepath.Dir(path), name))
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return partials, nil
+}
+
+func (l *LocalFS) walkFiles(rootPath string, fn func(path string, d fs.DirEntry) error) error {
+	fsys := l.getFsys()
+
+	rootPath = strings.TrimLeft(rootPath, "/")
+	rootPath = strings.TrimRight(rootPath, "/")
+
+	if err := fs.WalkDir(fsys, rootPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+
+			return errors.Wrapf(err, "error at %s", path)
+		}
+
+		if d.IsDir() {
+			return nil
+		}
+
+		return fn(path, d)
+	}); err != nil {
+		return errors.Wrapf(err, "failed to walk [%s, %s]", l.root, rootPath)
+	}
+
+	return nil
 }
 
 func (l *LocalFS) toLocalPath(path string) string {
@@ -109,7 +141,12 @@ func (l *LocalFS) Delete(path string) error {
 		return errors.Wrap(err, "failed to delete file")
 	}
 
-	if err := os.Remove(toPartialPath(path)); err != nil && !os.IsNotExist(err) {
+	return nil
+}
+
+func (l *LocalFS) DeletePartial(path string) error {
+	path = toPartialPath(l.toLocalPath(path))
+	if err := os.Remove(path); err != nil {
 		return errors.Wrap(err, "failed to delete partial file")
 	}
 

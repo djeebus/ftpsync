@@ -124,8 +124,42 @@ func (p *Processor) Process(rootPath string) error {
 		}
 	}
 
+	if err = p.cleanPartials(rootPath); err != nil {
+		return errors.Wrap(err, "failed to clean partial downloads")
+	}
+
 	if err = p.local.CleanDirectories(rootPath); err != nil {
 		return errors.Wrap(err, "failed to clean directories")
+	}
+
+	return nil
+}
+
+// cleanPartials deletes partial downloads that are no longer needed, either
+// because the download completed or the file is gone from the remote.
+func (p *Processor) cleanPartials(rootPath string) error {
+	partials, err := p.local.GetAllPartials(rootPath)
+	if err != nil {
+		return err
+	}
+
+	for _, path := range partials.ToList() {
+		log := p.log.WithField("path", path)
+
+		isComplete, err := p.local.Exists(path)
+		if err != nil {
+			log.WithError(err).Error("failed to check for completed file")
+			continue
+		}
+
+		if p.remoteFiles.Has(path) && !isComplete {
+			continue
+		}
+
+		log.WithField("complete", isComplete).Info("deleting partial download")
+		if err = p.local.DeletePartial(path); err != nil {
+			log.WithError(err).Error("failed to delete partial download")
+		}
 	}
 
 	return nil

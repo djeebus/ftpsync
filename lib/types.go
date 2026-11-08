@@ -19,6 +19,9 @@ type Destination interface {
 	GetAllFiles(path string) (*SizeSet, error)
 	Delete(path string) error
 	Exists(path string) (bool, error)
+	// GetAllPartials returns the paths of the files that have partial downloads.
+	GetAllPartials(path string) (*Set, error)
+	DeletePartial(path string) error
 	// PartialSize returns how many bytes of an interrupted download of path are on disk.
 	PartialSize(path string) (int64, error)
 	// Write appends fp to the partial download of path, starting at offset, and

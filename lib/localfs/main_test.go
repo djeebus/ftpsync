@@ -83,3 +83,19 @@ func TestWriteRestartTruncates(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "new", string(data))
 }
+
+func TestGetAllPartials(t *testing.T) {
+	root := t.TempDir()
+	d, err := New(config.Config{Destination: root, DirMode: 0o755, FileMode: 0o644}, logrus.New())
+	require.NoError(t, err)
+
+	_, err = d.Write("/a/b/file.txt", &failingReader{data: []byte("partial")}, 0)
+	require.Error(t, err)
+
+	partials, err := d.GetAllPartials("/a")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"/a/b/file.txt"}, partials.ToList())
+
+	require.NoError(t, d.DeletePartial("/a/b/file.txt"))
+	assert.NoFileExists(t, filepath.Join(root, "a", "b", ".ftpsync-partial.file.txt"))
+}
