@@ -85,7 +85,7 @@ func (f *source) List(path string) (lib.ListResult, error) {
 	return result, nil
 }
 
-func (f *source) Read(path string, offset int64) (io.ReadCloser, int64, error) {
+func (f *source) ReadAt(path string, offset int64) (io.ReadCloser, int64, error) {
 	path = f.toRemotePath(path)
 
 	e, err := f.conn.RetrFrom(path, uint64(offset))

@@ -21,7 +21,7 @@ type fakeSource struct {
 	files map[string]string
 }
 
-func (f *fakeSource) Read(path string, offset int64) (io.ReadCloser, int64, error) {
+func (f *fakeSource) ReadAt(path string, offset int64) (io.ReadCloser, int64, error) {
 	return io.NopCloser(strings.NewReader(f.files[path][offset:])), offset, nil
 }
 

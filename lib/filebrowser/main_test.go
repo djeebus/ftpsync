@@ -159,7 +159,7 @@ func TestFileBrowser_ReadOffset(t *testing.T) {
 	f, _ := newTestServer(t, "hello world")
 	require.NoError(t, f.login())
 
-	body, offset, err := f.Read("/file", 6)
+	body, offset, err := f.ReadAt("/file", 6)
 	require.NoError(t, err)
 	defer body.Close()
 
@@ -176,7 +176,7 @@ func TestFileBrowser_ReadRelogin(t *testing.T) {
 	// server rotates the token, so ours is rejected
 	f.authCookie = "expired"
 
-	body, offset, err := f.Read("/file", 0)
+	body, offset, err := f.ReadAt("/file", 0)
 	require.NoError(t, err)
 	defer body.Close()
 
@@ -192,7 +192,7 @@ func TestFileBrowser_ReadRefreshesOldToken(t *testing.T) {
 	require.NoError(t, f.login())
 	f.authTime = time.Now().Add(-2 * maxTokenAge)
 
-	body, _, err := f.Read("/file", 0)
+	body, _, err := f.ReadAt("/file", 0)
 	require.NoError(t, err)
 	body.Close()
 

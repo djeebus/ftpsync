@@ -3,9 +3,9 @@ package lib
 import "io"
 
 type Source interface {
-	// Read opens path starting at offset. It returns the offset the stream
+	// ReadAt opens path starting at offset. It returns the offset the stream
 	// actually starts at, which is 0 if the source could not honor the offset.
-	Read(path string, offset int64) (io.ReadCloser, int64, error)
+	ReadAt(path string, offset int64) (io.ReadCloser, int64, error)
 	GetAllFiles(path string) (*SizeSet, error)
 	Close() error
 }

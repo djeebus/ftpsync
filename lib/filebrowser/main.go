@@ -227,7 +227,7 @@ func (f *FileBrowser) doRequest(method, apiPath string, headers http.Header) (*h
 	return response, nil
 }
 
-func (f *FileBrowser) Read(path string, offset int64) (io.ReadCloser, int64, error) {
+func (f *FileBrowser) ReadAt(path string, offset int64) (io.ReadCloser, int64, error) {
 	apiPath := strings.TrimLeft(path, "/")
 	apiPath = filepath.Join("/api/raw", apiPath)
 	apiPath = f.toUrl(apiPath)

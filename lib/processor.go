@@ -194,7 +194,7 @@ func downloadFile(_ FileStatusKey, p *Processor, path string) error {
 
 	log.WithField("offset", offset).Info("downloading")
 
-	fp, offset, err := p.remote.Read(path, offset)
+	fp, offset, err := p.remote.ReadAt(path, offset)
 	if err != nil {
 		return errors.Wrapf(err, "failed to read %s", path)
 	}
