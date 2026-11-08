@@ -67,7 +67,7 @@ func (l *LocalFS) GetAllFiles(rootPath string) (*lib.SizeSet, error) {
 			return errors.Wrapf(err, "error at %s", path)
 		}
 
-		if d.IsDir() {
+		if d.IsDir() || strings.HasSuffix(path, partialSuffix) {
 			return nil
 		}
 
@@ -109,10 +109,32 @@ func (l *LocalFS) Delete(path string) error {
 		return errors.Wrap(err, "failed to delete file")
 	}
 
+	if err := os.Remove(toPartialPath(path)); err != nil && !os.IsNotExist(err) {
+		return errors.Wrap(err, "failed to delete partial file")
+	}
+
 	return nil
 }
 
-func (l *LocalFS) Write(path string, fp io.ReadCloser) (int64, error) {
+// partialSuffix marks in-progress downloads, so they can be resumed after a failure
+const partialSuffix = ".ftpsync-partial"
+
+func toPartialPath(path string) string {
+	return path + partialSuffix
+}
+
+func (l *LocalFS) PartialSize(path string) (int64, error) {
+	info, err := os.Stat(toPartialPath(l.toLocalPath(path)))
+	if os.IsNotExist(err) {
+		return 0, nil
+	} else if err != nil {
+		return 0, errors.Wrap(err, "failed to check partial file")
+	}
+
+	return info.Size(), nil
+}
+
+func (l *LocalFS) Write(path string, fp io.Reader, offset int64) (int64, error) {
 	var err error
 	path = l.toLocalPath(path)
 	dirname := filepath.Dir(path)
@@ -126,24 +148,35 @@ func (l *LocalFS) Write(path string, fp io.ReadCloser) (int64, error) {
 		}
 	}
 
-	temppath, err := os.CreateTemp(dirname, "temp")
+	partialPath := toPartialPath(path)
+	partial, err := os.OpenFile(partialPath, os.O_WRONLY|os.O_CREATE, l.fileMode)
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to create temp file")
+		return 0, errors.Wrap(err, "failed to open partial file")
 	}
 
-	size, err := io.Copy(temppath, fp)
+	// drop anything past offset, so a short or restarted read never leaves stale bytes behind
+	if err = partial.Truncate(offset); err != nil {
+		l.safelyClose(partial)
+		return 0, errors.Wrap(err, "failed to truncate partial file")
+	}
+	if _, err = partial.Seek(offset, io.SeekStart); err != nil {
+		l.safelyClose(partial)
+		return 0, errors.Wrap(err, "failed to seek partial file")
+	}
+
+	written, err := io.Copy(partial, fp)
+	size := offset + written
 	if err != nil {
-		l.safelyClose(temppath)
-		l.safelyRemove(temppath.Name())
-		return size, fmt.Errorf("failed to write file to disk (wrote %d bytes): %w", size, err)
+		l.safelyClose(partial)
+		return size, fmt.Errorf("failed to write file to disk (wrote %d bytes): %w", written, err)
 	}
 
-	if err = temppath.Close(); err != nil {
-		return 0, errors.Wrap(err, "failed to close temp file")
+	if err = partial.Close(); err != nil {
+		return size, errors.Wrap(err, "failed to close partial file")
 	}
 
-	if err = os.Rename(temppath.Name(), path); err != nil {
-		return 0, errors.Wrap(err, "failed to rename temp file to final destination")
+	if err = os.Rename(partialPath, path); err != nil {
+		return size, errors.Wrap(err, "failed to rename partial file to final destination")
 	}
 
 	if err = os.Chmod(path, l.fileMode); err != nil {
@@ -208,20 +241,11 @@ func (l *LocalFS) CleanDirectories(path string) error {
 	return err
 }
 
-func (l *LocalFS) safelyClose(temppath *os.File) {
-	if err := temppath.Close(); err != nil {
+func (l *LocalFS) safelyClose(fp *os.File) {
+	if err := fp.Close(); err != nil {
 		l.logger.
-			WithField("path", temppath.Name()).
+			WithField("path", fp.Name()).
 			WithError(err).
-			Error("failed to close temp file")
-	}
-}
-
-func (l *LocalFS) safelyRemove(path string) {
-	if err := os.Remove(path); err != nil {
-		l.logger.
-			WithField("path", path).
-			WithError(err).
-			Error("failed to remove file")
+			Error("failed to close file")
 	}
 }

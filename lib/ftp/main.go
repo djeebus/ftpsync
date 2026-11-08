@@ -85,15 +85,15 @@ func (f *source) List(path string) (lib.ListResult, error) {
 	return result, nil
 }
 
-func (f *source) Read(path string) (io.ReadCloser, error) {
+func (f *source) Read(path string, offset int64) (io.ReadCloser, int64, error) {
 	path = f.toRemotePath(path)
 
-	e, err := f.conn.Retr(path)
+	e, err := f.conn.RetrFrom(path, uint64(offset))
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to download file")
+		return nil, 0, errors.Wrap(err, "failed to download file")
 	}
 
-	return e, nil
+	return e, offset, nil
 }
 
 func (f *source) Close() error {

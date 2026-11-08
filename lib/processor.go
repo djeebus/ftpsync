@@ -10,7 +10,7 @@ import (
 )
 
 func BuildProcessor(src Source, db Database, precheck Precheck, dst Destination, log logrus.FieldLogger) *Processor {
-	return &Processor{src, db, dst, precheck, log}
+	return &Processor{remote: src, db: db, local: dst, precheck: precheck, log: log, remoteFiles: NewSizeSet()}
 }
 
 type Processor struct {
@@ -19,6 +19,9 @@ type Processor struct {
 	local    Destination
 	precheck Precheck
 	log      logrus.FieldLogger
+
+	// remoteFiles is populated by Process
+	remoteFiles *SizeSet
 }
 
 type FileStatusKey struct {
@@ -67,6 +70,7 @@ func (p *Processor) Process(rootPath string) error {
 	if remoteFiles, err = p.remote.GetAllFiles(rootPath); err != nil {
 		return errors.Wrap(err, "failed to get ftp files")
 	}
+	p.remoteFiles = remoteFiles
 	p.log.WithField("count", remoteFiles.Len()).Info("found remote files")
 
 	if dbFiles, err = p.db.GetAllFiles(rootPath); err != nil {
@@ -145,28 +149,39 @@ func downloadFile(_ FileStatusKey, p *Processor, path string) error {
 		log.Info("file is ready for download")
 	}
 
-	log.Info("downloading")
+	offset, err := p.local.PartialSize(path)
+	if err != nil {
+		return errors.Wrapf(err, "failed to check partial download of %s", path)
+	}
+	if remoteSize, ok := p.remoteFiles.Get(path); ok && offset >= remoteSize {
+		// partial is complete or bogus, either way start over
+		offset = 0
+	}
 
-	fp, err := p.remote.Read(path)
+	log.WithField("offset", offset).Info("downloading")
+
+	fp, offset, err := p.remote.Read(path, offset)
 	if err != nil {
 		return errors.Wrapf(err, "failed to read %s", path)
 	}
-
-	start := time.Now()
-	bytes, err := p.local.Write(path, fp)
-	if err != nil {
-		return fmt.Errorf("failed to write %s (wrote %d bytes): %w", path, bytes, err)
-	}
 	defer func() {
 		if err := fp.Close(); err != nil {
-			fmt.Printf("failed to close reader for %s: %v", path, err)
+			log.WithError(err).Warning("failed to close reader")
 		}
 	}()
+
+	start := time.Now()
+	size, err := p.local.Write(path, fp, offset)
+	bytes := size - offset
+	if err != nil {
+		return fmt.Errorf("failed to write %s (wrote %d bytes, %d total): %w", path, bytes, size, err)
+	}
 
 	done := time.Since(start)
 	log.WithFields(logrus.Fields{
 		"bytes_str": fmtSize(bytes),
 		"bytes":     bytes,
+		"resumed":   offset,
 		"seconds":   int64(done.Seconds()),
 		"speed":     fmtSpeed(bytes, done),
 	}).Info("download complete")

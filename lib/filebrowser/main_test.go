@@ -1,9 +1,15 @@
 package filebrowser
 
 import (
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -117,4 +123,78 @@ func TestFileBrowser_includeEntry(t *testing.T) {
 			assert.Equal(t, testCase.shouldInclude, actual)
 		})
 	}
+}
+
+func newTestServer(t *testing.T, content string) (*FileBrowser, *int) {
+	logins := 0
+	validToken := ""
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/login", func(w http.ResponseWriter, r *http.Request) {
+		logins++
+		validToken = fmt.Sprintf("token-%d", logins)
+		_, _ = w.Write([]byte(validToken))
+	})
+	mux.HandleFunc("/api/raw/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Auth") != validToken {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		http.ServeContent(w, r, "file", time.Time{}, strings.NewReader(content))
+	})
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	u, err := url.Parse(server.URL)
+	require.NoError(t, err)
+
+	f, err := New(u, logrus.New())
+	require.NoError(t, err)
+	f.url.Scheme = "http"
+
+	return f, &logins
+}
+
+func TestFileBrowser_ReadOffset(t *testing.T) {
+	f, _ := newTestServer(t, "hello world")
+	require.NoError(t, f.login())
+
+	body, offset, err := f.Read("/file", 6)
+	require.NoError(t, err)
+	defer body.Close()
+
+	data, err := io.ReadAll(body)
+	require.NoError(t, err)
+	assert.Equal(t, int64(6), offset)
+	assert.Equal(t, "world", string(data))
+}
+
+func TestFileBrowser_ReadRelogin(t *testing.T) {
+	f, logins := newTestServer(t, "hello world")
+	require.NoError(t, f.login())
+
+	// server rotates the token, so ours is rejected
+	f.authCookie = "expired"
+
+	body, offset, err := f.Read("/file", 0)
+	require.NoError(t, err)
+	defer body.Close()
+
+	data, err := io.ReadAll(body)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), offset)
+	assert.Equal(t, "hello world", string(data))
+	assert.Equal(t, 2, *logins)
+}
+
+func TestFileBrowser_ReadRefreshesOldToken(t *testing.T) {
+	f, logins := newTestServer(t, "hello world")
+	require.NoError(t, f.login())
+	f.authTime = time.Now().Add(-2 * maxTokenAge)
+
+	body, _, err := f.Read("/file", 0)
+	require.NoError(t, err)
+	body.Close()
+
+	assert.Equal(t, 2, *logins)
 }
