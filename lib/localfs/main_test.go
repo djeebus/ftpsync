@@ -47,6 +47,7 @@ func TestWriteResume(t *testing.T) {
 	partial, err := d.PartialSize("/a/file.txt")
 	require.NoError(t, err)
 	assert.Equal(t, int64(6), partial)
+	assert.FileExists(t, filepath.Join(root, "a", ".ftpsync-partial.file.txt"))
 
 	// partial downloads are not reported as local files
 	files, err := d.GetAllFiles("/a")

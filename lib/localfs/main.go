@@ -67,7 +67,7 @@ func (l *LocalFS) GetAllFiles(rootPath string) (*lib.SizeSet, error) {
 			return errors.Wrapf(err, "error at %s", path)
 		}
 
-		if d.IsDir() || strings.HasSuffix(path, partialSuffix) {
+		if d.IsDir() || strings.HasPrefix(d.Name(), partialPrefix) {
 			return nil
 		}
 
@@ -116,11 +116,11 @@ func (l *LocalFS) Delete(path string) error {
 	return nil
 }
 
-// partialSuffix marks in-progress downloads, so they can be resumed after a failure
-const partialSuffix = ".ftpsync-partial"
+// partialPrefix marks in-progress downloads as hidden files, so they can be resumed after a failure
+const partialPrefix = ".ftpsync-partial."
 
 func toPartialPath(path string) string {
-	return path + partialSuffix
+	return filepath.Join(filepath.Dir(path), partialPrefix+filepath.Base(path))
 }
 
 func (l *LocalFS) PartialSize(path string) (int64, error) {
