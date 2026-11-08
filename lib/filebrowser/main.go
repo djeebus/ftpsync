@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -36,8 +38,23 @@ func New(url *url.URL, logger logrus.FieldLogger) (*FileBrowser, error) {
 	url.User = nil
 	url.RawQuery = ""
 
+	// no overall timeout, downloads can legitimately take hours
+	src.client.Transport = &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout:   30 * time.Second,
+		ResponseHeaderTimeout: time.Minute,
+		IdleConnTimeout:       90 * time.Second,
+	}
+
 	return &src, nil
 }
+
+// filebrowser tokens expire after 2 hours by default, refresh well before then
+const maxTokenAge = time.Hour
 
 type FileBrowser struct {
 	url    *url.URL
@@ -47,6 +64,7 @@ type FileBrowser struct {
 	excludedPatterns   []string
 	username, password string
 	authCookie         string
+	authTime           time.Time
 }
 
 var _ lib.Source = new(FileBrowser)
@@ -95,6 +113,7 @@ func (f *FileBrowser) login() error {
 	}
 
 	f.authCookie = responseString
+	f.authTime = time.Now()
 	return nil
 }
 
@@ -129,7 +148,7 @@ func (f *FileBrowser) List(path string) (lib.ListResult, error) {
 	apiPath = filepath.Join("/api/resources", apiPath)
 	apiPath = f.toUrl(apiPath)
 
-	response, err := f.request("GET", apiPath)
+	response, err := f.request("GET", apiPath, nil)
 	if err != nil {
 		return result, err
 	}
@@ -165,10 +184,38 @@ func (f *FileBrowser) List(path string) (lib.ListResult, error) {
 
 }
 
-func (f *FileBrowser) request(method, apiPath string) (*http.Response, error) {
+func (f *FileBrowser) request(method, apiPath string, headers http.Header) (*http.Response, error) {
+	if time.Since(f.authTime) > maxTokenAge {
+		if err := f.login(); err != nil {
+			return nil, errors.Wrap(err, "failed to refresh login")
+		}
+	}
+
+	response, err := f.doRequest(method, apiPath, headers)
+	if err != nil {
+		return nil, err
+	}
+
+	if response.StatusCode == http.StatusUnauthorized {
+		response.Body.Close()
+		f.logger.Info("token rejected, logging in again")
+		if err = f.login(); err != nil {
+			return nil, errors.Wrap(err, "failed to refresh login")
+		}
+
+		return f.doRequest(method, apiPath, headers)
+	}
+
+	return response, nil
+}
+
+func (f *FileBrowser) doRequest(method, apiPath string, headers http.Header) (*http.Response, error) {
 	request, err := http.NewRequest(method, apiPath, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to make request")
+	}
+	for key, values := range headers {
+		request.Header[key] = values
 	}
 	request.Header.Add("Cookie", fmt.Sprintf("auth=%s", f.authCookie))
 	request.Header.Add("X-Auth", f.authCookie)
@@ -180,24 +227,35 @@ func (f *FileBrowser) request(method, apiPath string) (*http.Response, error) {
 	return response, nil
 }
 
-func (f *FileBrowser) Read(path string) (io.ReadCloser, error) {
-	// https://sky.seedhost.eu/jioewjafioewaj/filebrowser/api/raw/downloads/.htaccess?auth=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoxLCJsb2NhbGUiOiJlbiIsInZpZXdNb2RlIjoibGlzdCIsInNpbmdsZUNsaWNrIjpmYWxzZSwicGVybSI6eyJhZG1pbiI6dHJ1ZSwiZXhlY3V0ZSI6dHJ1ZSwiY3JlYXRlIjp0cnVlLCJyZW5hbWUiOnRydWUsIm1vZGlmeSI6dHJ1ZSwiZGVsZXRlIjp0cnVlLCJzaGFyZSI6dHJ1ZSwiZG93bmxvYWQiOnRydWV9LCJjb21tYW5kcyI6W10sImxvY2tQYXNzd29yZCI6ZmFsc2UsImhpZGVEb3RmaWxlcyI6ZmFsc2UsImRhdGVGb3JtYXQiOmZhbHNlfSwiaXNzIjoiRmlsZSBCcm93c2VyIiwiZXhwIjoxNjg1NTQ2MzI2LCJpYXQiOjE2ODU1MzkxMjZ9.pNBHHV-EhUVF7VebdP3VRDk8nWK4fZHxUbnbsInq3rY&
+func (f *FileBrowser) ReadAt(path string, offset int64) (io.ReadCloser, int64, error) {
 	apiPath := strings.TrimLeft(path, "/")
 	apiPath = filepath.Join("/api/raw", apiPath)
 	apiPath = f.toUrl(apiPath)
-	apiPath += "?auth=" + f.authCookie
 
-	response, err := f.request("GET", apiPath)
+	headers := http.Header{}
+	if offset > 0 {
+		headers.Set("Range", fmt.Sprintf("bytes=%d-", offset))
+	}
+
+	response, err := f.request("GET", apiPath, headers)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to make request")
+		return nil, 0, errors.Wrap(err, "failed to make request")
 	}
 
 	if response.StatusCode >= 400 {
 		response.Body.Close()
-		return nil, fmt.Errorf("failed to get file: %d", response.StatusCode)
+		return nil, 0, fmt.Errorf("failed to get file: %d", response.StatusCode)
 	}
 
-	return response.Body, nil
+	if response.StatusCode != http.StatusPartialContent {
+		// server ignored the range, so this is the whole file
+		offset = 0
+	} else if start := response.Header.Get("Content-Range"); !strings.HasPrefix(start, fmt.Sprintf("bytes %d-", offset)) {
+		response.Body.Close()
+		return nil, 0, fmt.Errorf("unexpected content range for offset %d: %q", offset, start)
+	}
+
+	return response.Body, offset, nil
 }
 
 func (f *FileBrowser) Close() error {
