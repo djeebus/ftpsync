@@ -171,17 +171,18 @@ func (l *LocalFS) PartialSize(path string) (int64, error) {
 	return info.Size(), nil
 }
 
-func (l *LocalFS) WriteAt(path string, fp io.Reader, offset int64) (int64, error) {
+func (l *LocalFS) WriteAt(path string, fp io.Reader, offset, size int64) (int64, error) {
 	var err error
 	path = l.toLocalPath(path)
 	dirname := filepath.Dir(path)
 
+	newDirs := missingDirs(dirname)
 	if err = os.MkdirAll(dirname, l.dirMode); err != nil {
 		return 0, errors.Wrap(err, "failed to create directory")
 	}
-	if l.dirUserID != 0 && l.dirGroupID != 0 {
-		if err = os.Chown(dirname, int(l.dirUserID), int(l.dirGroupID)); err != nil {
-			return 0, errors.Wrap(err, "failed to chwon directory")
+	for _, dir := range newDirs {
+		if err = chown(dir, int(l.dirUserID), int(l.dirGroupID)); err != nil {
+			return 0, errors.Wrap(err, "failed to chown directory")
 		}
 	}
 
@@ -202,31 +203,65 @@ func (l *LocalFS) WriteAt(path string, fp io.Reader, offset int64) (int64, error
 	}
 
 	written, err := io.Copy(partial, fp)
-	size := offset + written
+	total := offset + written
 	if err != nil {
 		l.safelyClose(partial)
-		return size, fmt.Errorf("failed to write file to disk (wrote %d bytes): %w", written, err)
+		return total, fmt.Errorf("failed to write file to disk (wrote %d bytes): %w", written, err)
 	}
 
 	if err = partial.Close(); err != nil {
-		return size, errors.Wrap(err, "failed to close partial file")
+		return total, errors.Wrap(err, "failed to close partial file")
+	}
+
+	if total != size {
+		return total, fmt.Errorf("download ended at %d bytes, expected %d", total, size)
 	}
 
 	if err = os.Rename(partialPath, path); err != nil {
-		return size, errors.Wrap(err, "failed to rename partial file to final destination")
+		return total, errors.Wrap(err, "failed to rename partial file to final destination")
 	}
 
 	if err = os.Chmod(path, l.fileMode); err != nil {
-		return 0, errors.Wrap(err, "failed to set the mode")
+		return total, errors.Wrap(err, "failed to set the mode")
 	}
 
-	if l.fileUserID != 0 && l.fileGroupID != 0 {
-		if err = os.Chown(path, int(l.fileUserID), int(l.fileGroupID)); err != nil {
-			return 0, errors.Wrap(err, "failed to set file owner")
+	if err = chown(path, int(l.fileUserID), int(l.fileGroupID)); err != nil {
+		return total, errors.Wrap(err, "failed to set file owner")
+	}
+
+	return total, nil
+}
+
+// missingDirs returns dir and each of its ancestors that do not exist yet, outermost first.
+func missingDirs(dir string) []string {
+	var dirs []string
+	for {
+		if _, err := os.Stat(dir); err == nil {
+			break
 		}
-	}
+		dirs = append([]string{dir}, dirs...)
 
-	return size, nil
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return dirs
+}
+
+// chown sets whichever of uid and gid are configured; 0 means unset.
+func chown(path string, uid, gid int) error {
+	if uid == 0 && gid == 0 {
+		return nil
+	}
+	if uid == 0 {
+		uid = -1
+	}
+	if gid == 0 {
+		gid = -1
+	}
+	return os.Chown(path, uid, gid)
 }
 
 func (l *LocalFS) cleanDirectories(path string) (isDeleted bool, err error) {

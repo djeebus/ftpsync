@@ -1,8 +1,10 @@
 package lib
 
 import (
+	"context"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -41,7 +43,7 @@ func (key FileStatusKey) InSync() bool {
 	return key.HasRemote && key.IsRecorded && key.HasLocal
 }
 
-type TruthAction func(FileStatusKey, *Processor, string) error
+type TruthAction func(context.Context, FileStatusKey, *Processor, string) error
 type NamedAction struct {
 	Action TruthAction
 	Name   string
@@ -58,7 +60,7 @@ var fileStatusActions = map[FileStatusKey]NamedAction{
 	{true, false, true}:   {recordFile, "record"},
 }
 
-func (p *Processor) Process(rootPath string) error {
+func (p *Processor) Process(ctx context.Context, rootPath string) error {
 	var (
 		err error
 
@@ -87,6 +89,10 @@ func (p *Processor) Process(rootPath string) error {
 	p.log.WithField("count", allFiles.Len()).Info("total files found")
 
 	for _, file := range allFiles.ToList() {
+		if err = ctx.Err(); err != nil {
+			return err
+		}
+
 		log := p.log.WithField("file", file)
 		hasDbFile := dbFiles.Has(file)
 		localSize, hasLocalFile := localFiles.Get(file)
@@ -114,7 +120,7 @@ func (p *Processor) Process(rootPath string) error {
 				Info("out of sync")
 		}
 
-		if err = action.Action(key, p, file); err != nil {
+		if err = action.Action(ctx, key, p, file); err != nil {
 			log.
 				WithField("action", action.Name).
 				WithField("state", key.String()).
@@ -165,7 +171,7 @@ func (p *Processor) cleanPartials(rootPath string) error {
 	return nil
 }
 
-func downloadFile(_ FileStatusKey, p *Processor, path string) error {
+func downloadFile(ctx context.Context, _ FileStatusKey, p *Processor, path string) error {
 	log := p.log.WithField("path", path)
 
 	if p.precheck != nil {
@@ -183,11 +189,16 @@ func downloadFile(_ FileStatusKey, p *Processor, path string) error {
 		log.Info("file is ready for download")
 	}
 
+	remoteSize, ok := p.remoteFiles.Get(path)
+	if !ok {
+		return fmt.Errorf("%s is not on the remote", path)
+	}
+
 	offset, err := p.local.PartialSize(path)
 	if err != nil {
 		return errors.Wrapf(err, "failed to check partial download of %s", path)
 	}
-	if remoteSize, ok := p.remoteFiles.Get(path); ok && offset >= remoteSize {
+	if offset >= remoteSize {
 		// partial is complete or bogus, either way start over
 		offset = 0
 	}
@@ -198,14 +209,18 @@ func downloadFile(_ FileStatusKey, p *Processor, path string) error {
 	if err != nil {
 		return errors.Wrapf(err, "failed to read %s", path)
 	}
+	// closing the reader on cancellation aborts the copy, leaving the partial download to resume
+	closeReader := sync.OnceValue(fp.Close)
+	stopClose := context.AfterFunc(ctx, func() { _ = closeReader() })
 	defer func() {
-		if err := fp.Close(); err != nil {
+		stopClose()
+		if err := closeReader(); err != nil {
 			log.WithError(err).Warning("failed to close reader")
 		}
 	}()
 
 	start := time.Now()
-	size, err := p.local.WriteAt(path, fp, offset)
+	size, err := p.local.WriteAt(path, fp, offset, remoteSize)
 	bytes := size - offset
 	if err != nil {
 		return fmt.Errorf("failed to write %s (wrote %d bytes, %d total): %w", path, bytes, size, err)
@@ -226,7 +241,7 @@ func downloadFile(_ FileStatusKey, p *Processor, path string) error {
 	return nil
 }
 
-func recordFile(_ FileStatusKey, p *Processor, path string) error {
+func recordFile(_ context.Context, _ FileStatusKey, p *Processor, path string) error {
 	log := p.log.WithField("path", path)
 	log.Info("recording")
 
@@ -237,11 +252,11 @@ func recordFile(_ FileStatusKey, p *Processor, path string) error {
 	return nil
 }
 
-func skipFile(_ FileStatusKey, _ *Processor, _ string) error {
+func skipFile(_ context.Context, _ FileStatusKey, _ *Processor, _ string) error {
 	return nil
 }
 
-func deleteFile(key FileStatusKey, p *Processor, path string) error {
+func deleteFile(_ context.Context, key FileStatusKey, p *Processor, path string) error {
 	log := p.log.WithField("path", path)
 
 	if key.IsRecorded {
@@ -261,7 +276,7 @@ func deleteFile(key FileStatusKey, p *Processor, path string) error {
 	return nil
 }
 
-func logFile(key FileStatusKey, p *Processor, path string) error {
+func logFile(_ context.Context, key FileStatusKey, p *Processor, path string) error {
 	log := p.log.WithField("path", path)
 	log.WithField("state", key.String()).Warn("file is in a weird state")
 	return nil
@@ -272,7 +287,7 @@ var markers = []string{"B", "KB", "MB", "GB", "TB"}
 func fmtSpeed(bytes int64, done time.Duration) string {
 	speed := float64(bytes) / done.Seconds()
 	idx := 0
-	for speed > 1024 && idx < len(markers) {
+	for speed > 1024 && idx < len(markers)-1 {
 		idx++
 		speed /= 1024
 	}
@@ -283,7 +298,7 @@ func fmtSpeed(bytes int64, done time.Duration) string {
 func fmtSize(bytes int64) string {
 	b := float64(bytes)
 	idx := 0
-	for b > 1024 {
+	for b > 1024 && idx < len(markers)-1 {
 		idx++
 		b /= 1024
 	}

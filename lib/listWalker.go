@@ -24,7 +24,7 @@ type Lister interface {
 func WalkLister(lister Lister, rootPath string) (*SizeSet, error) {
 	result := NewSizeSet()
 
-	work := Queue[string]{MaxSize: 1000}
+	var work Queue[string]
 	work.Enqueue(rootPath)
 
 	for !work.IsEmpty() {

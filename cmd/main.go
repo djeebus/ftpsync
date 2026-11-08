@@ -22,13 +22,6 @@ func RootCmd() error {
 		return errors.Wrap(err, "failed to get config")
 	}
 
-	if cfg.Source == "" {
-		return errors.New("must define a source")
-	}
-	if cfg.Destination == "" {
-		return errors.New("must define a precheck")
-	}
-
 	log := logrus.New()
 	log.SetLevel(cfg.LogLevel)
 	if strings.ToLower(cfg.LogFormat) == "json" {
@@ -36,7 +29,7 @@ func RootCmd() error {
 	}
 
 	if cfg.Repeat != 0 {
-		if err = doSync(cfg, log); err != nil {
+		if err = doSync(ctx, cfg, log); err != nil && ctx.Err() == nil {
 			log.WithError(err).Warning("failed to process")
 		}
 
@@ -45,12 +38,12 @@ func RootCmd() error {
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-time.After(cfg.Repeat):
-				if err = doSync(cfg, log); err != nil {
+				if err = doSync(ctx, cfg, log); err != nil && ctx.Err() == nil {
 					log.WithError(err).Warning("failed to process")
 				}
 			}
 		}
 	}
 
-	return doSync(cfg, log)
+	return doSync(ctx, cfg, log)
 }

@@ -2,7 +2,7 @@ package sqlite
 
 import (
 	"database/sql"
-	"fmt"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
@@ -12,7 +12,7 @@ import (
 
 const createFilesTable = `
 CREATE TABLE IF NOT EXISTS files (
-    path 	STRING 		NOT NULL 	PRIMARY KEY,
+    path 	TEXT 		NOT NULL 	PRIMARY KEY,
     time 	DATETIME 	NOT NULL	DEFAULT CURRENT_TIMESTAMP
 )
 `
@@ -37,20 +37,29 @@ func New(dbPath string) (lib.Database, error) {
 }
 
 func (s *database) GetAllFiles(rootPath string) (*lib.Set, error) {
-	row, err := s.db.Query(`SELECT path FROM files WHERE path LIKE ?`, fmt.Sprintf("%s%%", rootPath))
+	// compare the prefix directly, LIKE is case-insensitive and treats _ and % as wildcards
+	prefix := strings.TrimRight(rootPath, "/") + "/"
+	rows, err := s.db.Query(
+		`SELECT path FROM files WHERE path = ? OR substr(path, 1, length(?)) = ?`,
+		rootPath, prefix, prefix,
+	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get all files")
 	}
+	defer rows.Close()
 
 	var path string
 
 	files := lib.NewSet()
-	for row.Next() {
-		if err = row.Scan(&path); err != nil {
+	for rows.Next() {
+		if err = rows.Scan(&path); err != nil {
 			return nil, errors.Wrap(err, "failed to scan")
 		}
 
 		files.Set(path)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "failed to read files")
 	}
 
 	return files, nil
@@ -75,8 +84,8 @@ func (s *database) Exists(path string) (bool, error) {
 func (s *database) Record(path string) error {
 	if _, err := s.db.Exec(`
 INSERT INTO files (path) VALUES (?)
-ON CONFLICT (path) DO UPDATE SET path = excluded.path
-`, path, ""); err != nil {
+ON CONFLICT (path) DO UPDATE SET time = CURRENT_TIMESTAMP
+`, path); err != nil {
 		return errors.Wrapf(err, "failed to record %s", path)
 	}
 

@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"context"
+	"fmt"
 	"net/url"
 
 	"github.com/djeebus/ftpsync/lib/config"
@@ -15,7 +17,7 @@ import (
 	"github.com/djeebus/ftpsync/lib/sqlite"
 )
 
-func doSync(config config.Config, log logrus.FieldLogger) error {
+func doSync(ctx context.Context, config config.Config, log logrus.FieldLogger) error {
 	var (
 		err         error
 		precheckURL *url.URL
@@ -39,7 +41,7 @@ func doSync(config config.Config, log logrus.FieldLogger) error {
 	}
 
 	switch srcURL.Scheme {
-	case "ftp", "ftps", "sftp":
+	case "ftp", "ftps", "ftps-implicit":
 		if source, err = ftp.New(srcURL); err != nil {
 			return errors.Wrap(err, "failed to build ftp source")
 		}
@@ -48,32 +50,32 @@ func doSync(config config.Config, log logrus.FieldLogger) error {
 			return errors.Wrap(err, "failed to build filebrowser source")
 		}
 	default:
-		return errors.New("unknown source")
+		return fmt.Errorf("unknown source scheme: %q", srcURL.Scheme)
 	}
 	defer source.Close()
 
 	if precheckURL != nil {
 		switch precheckURL.Scheme {
 		case "deluge", "deluges":
-			if precheck, err = deluge.New(log, precheckURL, config.RootDir); err != nil {
+			if precheck, err = deluge.New(ctx, log, precheckURL, config.RootDir); err != nil {
 				return errors.Wrap(err, "failed to create deluge precheck")
 			}
 			defer precheck.Close()
+		default:
+			return fmt.Errorf("unknown precheck scheme: %q", precheckURL.Scheme)
 		}
 	}
 
 	if database, err = sqlite.New(config.Database); err != nil {
 		return errors.Wrap(err, "failed to build database")
 	}
+	defer database.Close()
+
 	if destination, err = localfs.New(config, log); err != nil {
 		return errors.Wrap(err, "failed to build destination")
 	}
 
 	processor := lib.BuildProcessor(source, database, precheck, destination, log)
 
-	if err := processor.Process(config.RootDir); err != nil {
-		return err
-	}
-
-	return nil
+	return processor.Process(ctx, config.RootDir)
 }
